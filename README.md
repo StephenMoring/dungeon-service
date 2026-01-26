@@ -51,7 +51,7 @@ This project is designed to build applied AI engineering skills through hands-on
 - **Embeddings**: OpenAI text-embedding-3-small
 - **CLI**: Typer
 
-See [architecture.md](./architecture.md) for detailed technical design.
+See [architecture.md](./docs/architecture.md) for detailed technical design.
 
 ## Project Structure
 
@@ -59,15 +59,14 @@ See [architecture.md](./architecture.md) for detailed technical design.
 dungeon/
 └── dungeon-service/          # Python backend service
     ├── src/
-    |---dungeon/
-    │     ├── api/              # FastAPI routers
-    │     ├── services/         # Business logic
-    │     │   ├── dm_agent.py   # DM orchestration
-    │     │   ├── retrieval.py  # RAG pipeline
-    │     │   └── llm.py        # LLM client
-    │     ├── models/           # SQLModel schemas
-    │     ├── db/               # Database setup
-    │     └── cli/              # CLI commands
+    │   ├── api/              # FastAPI routers
+    │   ├── services/         # Business logic
+    │   │   ├── dm_agent.py   # DM orchestration
+    │   │   ├── retrieval.py  # RAG pipeline
+    │   │   └── llm.py        # LLM client
+    │   ├── models/           # SQLModel schemas
+    │   ├── db/               # Database setup
+    │   └── cli/              # CLI commands
     ├── scripts/
     │   └── ingest_srd.py     # SRD embedding script
     ├── data/
@@ -123,11 +122,11 @@ Guidelines for when to introduce infrastructure and CI/CD tooling.
 
 - [x] Initialize Python project with `uv` or `Poetry`
 - [x] Set up project structure (`src/`, `tests/`, etc.)
-- [ ] Install dependencies: `fastapi`, `uvicorn`, `anthropic`, `sqlmodel`, `typer`
-- [ ] Create FastAPI app with health check endpoint (`GET /health`)
-- [ ] Create LLM service that calls Claude API
-- [ ] Create single endpoint `POST /chat` that accepts a message and returns LLM response
-- [ ] Set up environment variables for API keys (`.env` file, `python-dotenv`)
+- [x] Install dependencies: `fastapi`, `uvicorn`, `anthropic`, `sqlmodel`, `typer`
+- [x] Create FastAPI app with health check endpoint (`GET /health`)
+- [x] Create LLM service that calls Claude API
+- [x] Create single endpoint `POST /chat` that accepts a message and returns LLM response
+- [x] Set up environment variables for API keys (`.env` file, `python-dotenv`)
 - [ ] Create `Dockerfile` and `docker-compose.yml` with PostgreSQL + pgvector
 - [ ] Set up GitHub Actions: lint with Ruff, type check with mypy
 

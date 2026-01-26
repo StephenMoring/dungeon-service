@@ -2,7 +2,9 @@
 
 ## System Overview
 
-A CLI-based D&D dungeon master powered by an LLM with RAG-based rulebook retrieval. Players describe their character, engage in a chat-based campaign with an AI dungeon master, and the DM references the official SRD (System Reference Document) for accurate rulings.
+A CLI-based D&D dungeon master powered by an LLM with RAG-based rulebook retrieval.
+Players describe their character, engage in a chat-based campaign with an AI dungeon master,
+and the DM references the official SRD (System Reference Document) for accurate rulings.
 
 ## Architecture Diagram
 
@@ -84,41 +86,41 @@ A CLI-based D&D dungeon master powered by an LLM with RAG-based rulebook retriev
 
 ### Core Application
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| Language | Python 3.11+ | Primary development language |
-| Web Framework | FastAPI | Async API framework |
-| Database | PostgreSQL 15+ | Application data and vector storage |
-| Vector Storage | pgvector | Vector similarity search extension |
-| ORM | SQLModel | Database models and queries |
-| CLI Framework | Typer or Click | Command-line interface |
+| Layer          | Technology     | Purpose                             |
+| -------------- | -------------- | ----------------------------------- |
+| Language       | Python 3.11+   | Primary development language        |
+| Web Framework  | FastAPI        | Async API framework                 |
+| Database       | PostgreSQL 15+ | Application data and vector storage |
+| Vector Storage | pgvector       | Vector similarity search extension  |
+| ORM            | SQLModel       | Database models and queries         |
+| CLI Framework  | Typer or Click | Command-line interface              |
 
 ### AI/ML Components
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| LLM | Anthropic Claude API | Dungeon master responses |
-| Embeddings | OpenAI text-embedding-3-small | Document and query embeddings |
-| Text Processing | Manual or LangChain splitters | SRD chunking |
+| Component       | Technology                    | Purpose                       |
+| --------------- | ----------------------------- | ----------------------------- |
+| LLM             | Anthropic Claude API          | Dungeon master responses      |
+| Embeddings      | OpenAI text-embedding-3-small | Document and query embeddings |
+| Text Processing | Manual or LangChain splitters | SRD chunking                  |
 
 ### Infrastructure
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| Containerization | Docker | Application packaging |
-| Orchestration | Kubernetes | Production deployment |
-| IaC | Terraform | Infrastructure provisioning |
-| Cloud | AWS EKS | Managed Kubernetes |
-| CI/CD | GitHub Actions | Automated testing and deployment |
+| Component        | Technology     | Purpose                          |
+| ---------------- | -------------- | -------------------------------- |
+| Containerization | Docker         | Application packaging            |
+| Orchestration    | Kubernetes     | Production deployment            |
+| IaC              | Terraform      | Infrastructure provisioning      |
+| Cloud            | AWS EKS        | Managed Kubernetes               |
+| CI/CD            | GitHub Actions | Automated testing and deployment |
 
 ### Development Tools
 
-| Tool | Purpose |
-|------|---------|
-| uv or Poetry | Dependency management |
-| pytest | Testing |
-| Ruff | Linting and formatting |
-| pre-commit | Git hooks |
+| Tool         | Purpose                |
+| ------------ | ---------------------- |
+| uv or Poetry | Dependency management  |
+| pytest       | Testing                |
+| Ruff         | Linting and formatting |
+| pre-commit   | Git hooks              |
 
 ## Data Flow
 
