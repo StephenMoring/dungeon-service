@@ -127,7 +127,7 @@ Guidelines for when to introduce infrastructure and CI/CD tooling.
 - [x] Create LLM service that calls Claude API
 - [x] Create single endpoint `POST /chat` that accepts a message and returns LLM response
 - [x] Set up environment variables for API keys (`.env` file, `python-dotenv`)
-- [ ] Create `Dockerfile` and `docker-compose.yml` with PostgreSQL + pgvector
+- [x] Create `Dockerfile` and `docker-compose.yml` with PostgreSQL + pgvector
 - [ ] Set up GitHub Actions: lint with Ruff, type check with mypy
 
 #### Functional Requirements

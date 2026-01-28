@@ -9,11 +9,11 @@ lr:
 	uv run uvicorn src.main:app --reload
 
 lr-down:
-	docker compose --profile noapp -f infra/local/docker-compose.yml down
+	docker compose --profile noapp -f infra/local/docker-compose.yml down -v
 
 dr:
 	docker compose --profile all -f infra/local/docker-compose.yml up
 
 dr-down:
-	docker compose --profile all -f infra/local/docker-compose.yml down
+	docker compose --profile all -f infra/local/docker-compose.yml down -v
 
