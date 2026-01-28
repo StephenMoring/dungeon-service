@@ -380,7 +380,7 @@ docker-compose up -d db
 # (to be implemented)
 
 # Start the API
-uv run uvicorn src.dungeon.main:app --reload
+uv run uvicorn src.main:app --reload
 
 # Or run everything in Docker
 docker-compose up

@@ -1,0 +1,31 @@
+networks:
+  dungeon-service:
+services:
+  db:
+    image: postgres:16.2-alpine
+    restart: always
+    container_name: local_dungeon_pg_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: dungeon_pg_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    profiles: ["all", "noapp"]
+    networks:
+        - dungeon-service
+  app:
+    image: dungeoncrawler:latest
+    restart: always
+    container_name: local_dungeoncrawler
+    ports:
+      - "8000:8000"
+    command: ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    profiles: ["all"]
+    networks:
+        - dungeon-service
+
+volumes:
+  pgdata:
