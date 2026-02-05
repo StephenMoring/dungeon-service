@@ -13,6 +13,10 @@ class CharacterCreate(CharacterBase):
     pass
 
 
+class CharacterDescriptionCreate(SQLModel):
+    description: str
+
+
 class Character(CharacterBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     # name: str
