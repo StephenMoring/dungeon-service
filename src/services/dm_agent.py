@@ -1,5 +1,6 @@
 import os
 from anthropic import Anthropic
+from anthropic.types import TextBlock
 
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 master_system_prompt = """You are an AI Dungeon Master for a narrative focused RPG. You bring stories to life with vivid descriptions, memorable npcs, and player-driven adventures.
@@ -55,7 +56,11 @@ Assign stats that reflect the character concept. A scholarly wizard should have 
 
 ## Rules
 - If no class is provided, infer one that fits the description (e.g. warrior, mage, rogue, ranger, cleric, bard, etc.)
-- If no biography is provided, write a brief 2-3 sentence biography that fits the description and class
+- If no biography is provided, write a biography that fits the description and class
+- Biography must be 2-3 sentences and no more than 200 characters
+- Biography should only cover backstory before the adventure begins — no current events, no plot hooks
+- Write biography in third person past tense
+- Do not invent locations, organizations, or relationships not implied by the player's description
 - Generate a name if none is provided
 - Estimate a reasonable age if none is implied
 - Leave story_so_far as an empty string — their adventure hasn't begun yet
@@ -66,7 +71,6 @@ Respond with ONLY the raw JSON object. Do NOT wrap it in ```json``` or any other
   "name": "string",
   "hero_class": "string",
   "biography": "string",
-  "description": "string (use the player's original description)",
   "age": integer,
   "story_so_far": "",
   "strength": integer (1-10),
@@ -84,7 +88,7 @@ Respond with ONLY the raw JSON object. Do NOT wrap it in ```json``` or any other
 # first pass at this will be to submit the description to the model and have it return a specific format of data with character stats to then submit to the database
 def create_character(character_description):
     message = client.messages.create(
-        max_tokens=1024,
+        max_tokens=175,
         system=character_creation_prompt,
         messages=[
             {
@@ -94,6 +98,6 @@ def create_character(character_description):
         ],
         model="claude-sonnet-4-5-20250929",
     )
-    if message.content and hasattr(message.content[0], "text"):
+    if message.content and isinstance(message.content[0], TextBlock):
         message_text = message.content[0].text
         return message_text

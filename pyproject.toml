@@ -20,5 +20,8 @@ venvPath = "."
 venv = ".venv"
 extraPaths = ["."]
 
+[tool.ruff.lint.per-file-ignores]
+"src/models/*.py" = ["F821"]  # undefined-name — SQLAlchemy string references
+
 [dependency-groups]
 dev = ["httpx>=0.28.1", "pytest>=9.0.2"]

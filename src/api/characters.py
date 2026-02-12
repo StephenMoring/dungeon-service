@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 from src.db.db import get_session
 from src.models.character import CharacterDescriptionCreate
@@ -12,5 +12,7 @@ def create_character(
     character_description: CharacterDescriptionCreate,
     session: Session = Depends(get_session),
 ):
-    created_character = create(character_description, session)
-    return created_character
+    try:
+        return create(character_description, session)
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))

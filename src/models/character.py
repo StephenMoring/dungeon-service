@@ -1,4 +1,6 @@
-from sqlmodel import Field, SQLModel
+from typing import Optional
+
+from sqlmodel import Field, Relationship, SQLModel
 
 
 class CharacterBase(SQLModel):
@@ -19,6 +21,8 @@ class CharacterDescriptionCreate(SQLModel):
 
 class Character(CharacterBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    campaign_id: int | None = Field(default=None, foreign_key="campaign.id")
+    campaign: Optional["Campaign"] = Relationship(back_populates="characters")  # type: ignore[name-defined]
     # name: str
     # hero_class: str
     # level: int | None = 1

@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch
 from src.main import app
 from src.models.character import Character
+import src.models.campaign  # noqa: F401 - ensures Campaign is registered with SQLAlchemy
 
 client = TestClient(app)
 
@@ -21,22 +22,18 @@ class TestCharacterCreation:
             description="Tall and ragged, with an aura of great wisdom. Slow to speak but all listen when he does",
             age=55,
             story_so_far=None,
-            strength=None,
-            perception=None,
-            endurance=None,
-            charisma=None,
-            intelligence=None,
-            agility=None,
-            luck=None,
+            strength=7,
+            perception=6,
+            endurance=4,
+            charisma=8,
+            intelligence=10,
+            agility=3,
+            luck=5,
         )
         response = client.post(
             "/characters",
             json={
-                "name": "Gandalf",
-                "hero_class": "wizard",
-                "biography": "A learned wizard who has spent his life in a library",
                 "description": "Tall and ragged, with an aura of great wisdom. Slow to speak but all listen when he does",
-                "age": 55,
             },
         )
         assert response.status_code == 201
@@ -54,22 +51,18 @@ class TestCharacterCreation:
             description="lean and toned, his piercing eyes can see all",
             age=2405,
             story_so_far=None,
-            strength=None,
-            perception=None,
-            endurance=None,
-            charisma=None,
-            intelligence=None,
-            agility=None,
-            luck=None,
+            strength=5,
+            perception=9,
+            endurance=6,
+            charisma=7,
+            intelligence=5,
+            agility=9,
+            luck=6,
         )
         response = client.post(
             "/characters",
             json={
-                "name": "Legolas",
-                "hero_class": "ranger",
-                "biography": "An elven archer raised in the magical forests of Elaran, next in line to the throne",
                 "description": "lean and toned, his piercing eyes can see all",
-                "age": 2405,
             },
         )
         data = response.json()
@@ -77,28 +70,36 @@ class TestCharacterCreation:
         assert data["name"] == "Legolas"
         assert data["hero_class"] == "ranger"
 
-    def test_create_character_requires_name(self):
-        """Should return 422 if name is missing."""
+    def test_create_character_requires_description(self):
+        """Should return 422 if description is missing."""
         response = client.post(
             "/characters",
-            json={
-                "hero_class": "ranger",
-                "biography": "An elven archer raised in the magical forests of Elaran, next in line to the throne",
-                "description": "lean and toned, his piercing eyes can see all",
-                "age": 2405,
-            },
+            json={},
         )
         assert response.status_code == 422
 
-    def test_create_character_requires_class_type(self):
-        """Should return 422 if class_type is missing."""
+    @patch("src.api.characters.create")
+    def test_create_character_returns_502_when_llm_fails(self, mock_create):
+        """Should return 502 when the service raises ValueError."""
+        mock_create.side_effect = ValueError("LLM did not return a response")
         response = client.post(
             "/characters",
             json={
-                "name": "Aragorn",
-                "biography": "A learned wizard who has spent his life in a library",
-                "description": "Tall and ragged, with an aura of great wisdom. Slow to speak but all listen when he does",
-                "age": 1,
+                "description": "A mysterious wanderer from the northern wastes",
             },
         )
-        assert response.status_code == 422
+        assert response.status_code == 502
+        assert "LLM did not return a response" in response.json()["detail"]
+
+    @patch("src.api.characters.create")
+    def test_create_character_returns_502_on_invalid_json(self, mock_create):
+        """Should return 502 when the LLM returns invalid JSON."""
+        mock_create.side_effect = ValueError("LLM returned invalid json")
+        response = client.post(
+            "/characters",
+            json={
+                "description": "A mysterious wanderer from the northern wastes",
+            },
+        )
+        assert response.status_code == 502
+        assert "LLM returned invalid json" in response.json()["detail"]

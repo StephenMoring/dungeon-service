@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from src.services.dm_agent import chat
+from src.models.campaign import Campaign
 
 campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 

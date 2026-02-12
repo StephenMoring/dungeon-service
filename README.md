@@ -132,9 +132,9 @@ Guidelines for when to introduce infrastructure and CI/CD tooling.
 
 #### Functional Requirements
 
-- [ ] **FR-1.1**: When I send a POST request to `/chat` with `{"message": "Hello"}`, then I receive a JSON response with the LLM's reply
-- [ ] **FR-1.2**: When I run `docker-compose up`, then the API starts and is accessible on `localhost:8000`
-- [ ] **FR-1.3**: When I run `docker-compose up`, then PostgreSQL is running and accessible on `localhost:5432`
+- [x] **FR-1.1**: When I send a POST request to `/chat` with `{"message": "Hello"}`, then I receive a JSON response with the LLM's reply
+- [x] **FR-1.2**: When I run `docker-compose up`, then the API starts and is accessible on `localhost:8000`
+- [x] **FR-1.3**: When I run `docker-compose up`, then PostgreSQL is running and accessible on `localhost:5432`
 
 #### Definition of Done
 
@@ -150,7 +150,7 @@ Guidelines for when to introduce infrastructure and CI/CD tooling.
 
 #### Technical Requirements
 
-- [ ] Create DM system prompt with persona, tone, and behavioral guidelines
+- [x] Create DM system prompt with persona, tone, and behavioral guidelines
 - [ ] Create `Campaign` and `Message` SQLModel models
 - [ ] Create database tables and migration setup
 - [ ] Implement conversation history storage (save each message exchange)
