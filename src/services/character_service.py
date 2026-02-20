@@ -21,5 +21,4 @@ def create(
         session.add(new_character)
         session.commit()
         session.refresh(new_character)
-        print(new_character.model_dump_json)
         return new_character

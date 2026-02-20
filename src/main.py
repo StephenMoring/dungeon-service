@@ -4,6 +4,7 @@ from src.api.characters import character_router
 from src.db.db import create_db_and_tables
 from src.models import (
     character,
+    campaign,
 )  # TODO - temporary until we are deploying in more of a production state
 
 
