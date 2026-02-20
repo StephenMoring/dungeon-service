@@ -10,6 +10,7 @@ wheels/
 
 # environments
 .env
+.envrc
 
 # Virtual environments
 .venv

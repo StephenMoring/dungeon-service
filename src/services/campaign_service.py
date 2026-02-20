@@ -8,8 +8,17 @@ from src.services.dm_agent import create_campaign
 
 def create(campaign_description: CampaignDescriptionCreate, session: Session) -> str:
     campaign_json = create_campaign(campaign_description.description, session)
+    print(campaign_json)
     if not campaign_json:
         raise ValueError("LLM did not return a response")
+    if campaign_json.startswith("```"):
+        campaign_json = (
+            campaign_json.strip()
+            .removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
     try:
         campaign = json.loads(campaign_json)
     except json.JSONDecodeError:

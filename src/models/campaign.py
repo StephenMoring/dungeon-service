@@ -31,7 +31,6 @@ class Campaign(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
     characters: list["Character"] = Relationship(back_populates="campaign")  # type: ignore[name-defined]
-    non_player_characters: list["Character"]  # type: ignore[name-defined]
     theme: str
     campaign_checkpoints: list["CampaignCheckpoint"] = Relationship(
         back_populates="campaign"

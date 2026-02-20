@@ -38,6 +38,32 @@ Characters have seven attributes (1-10 scale, 5 is average)
 When a character performs an action or attempts something challenging, weigh their stat(s) and the narrative context to determine the outcome.
 """
 
+campaign_creation_prompt = """You are a campaign architect for a narrative RPG. Your job is to analyze a player's campaign description, classify it into relevant story tags, and use the search_checkpoints tool to find pre-authored story milestones that fit the campaign.
+
+## Your Process
+
+1. **Classify the description** — Read the player's request and identify the key themes, tone, setting, and content types it implies.
+
+2. **Call search_checkpoints** — Search for checkpoints that match. Choose tags that precisely reflect the description — fewer accurate tags beat many vague ones. Call the tool ONLY ONCE
+
+3. **Return a campaign** — Once you have results, respond with a raw JSON object and nothing else. Do not include any surrounding text, explanation, or formatting:
+{
+  "name": "string — an evocative campaign title",
+  "theme": "string — one sentence describing the campaign's core narrative tension",
+  "description": "string — 2-4 sentences describing the campaign setting and tone",
+  "checkpoint_ids": [integer, ...] — ordered list of checkpoint IDs selected from the search results
+}
+
+## Tag Reference
+Use these tags when calling search_checkpoints:
+
+**Setting**: wilderness, urban, dungeon, coastal, aquatic, enclosed, cold
+**Tone**: horror, mystery, intrigue, political, supernatural, investigation, moral-choice
+**Content**: combat, social, puzzle, exploration, stealth, heist, rescue, non-combat, siege, strategy
+**Enemies**: undead, troll, dragon, giant, werewolf, cult, boss
+**Situational**: urgent, timed, race, rival, fire, poison, ambush
+"""
+
 character_creation_prompt = """You are a character creation assistant for a narrative RPG. Given a character description and optionally a biography and/or class, generate a complete character sheet as a JSON object.
 
 ## Your Task
@@ -67,7 +93,7 @@ Assign stats that reflect the character concept. A scholarly wizard should have 
 - Leave story_so_far as an empty string — their adventure hasn't begun yet
 
 ## Output Format
-Respond with ONLY the raw JSON object. Do NOT wrap it in ```json``` or any other markdown. No commentary, no explanation, just the JSON:
+Respond with ONLY the raw JSON object. Do not include any surrounding text, explanation, or formatting — just the JSON:
 {
   "name": "string",
   "hero_class": "string",
@@ -97,6 +123,7 @@ def create_character(character_description):
         ],
         model="claude-sonnet-4-5-20250929",
     )
+    print(message)
     if message.content and isinstance(message.content[0], TextBlock):
         message_text = message.content[0].text
         return message_text
@@ -109,9 +136,9 @@ def create_campaign(campaign_description, session):
     while True:
         message = client.messages.create(
             max_tokens=1024,
-            system=master_system_prompt,
+            system=campaign_creation_prompt,
             tools=tools,
-            messages=[{"role": "user", "content": campaign_description}],
+            messages=messages,
             model="claude-sonnet-4-5-20250929",
         )
 
@@ -119,6 +146,7 @@ def create_campaign(campaign_description, session):
             tool_use = next(b for b in message.content if isinstance(b, ToolUseBlock))
             tool_input = tool_use.input
 
+            print(tool_input)
             result = handle_search_checkpoints(
                 session=session,
                 tags=tool_input.get("tags", ""),

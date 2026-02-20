@@ -10,6 +10,8 @@ def create(
     character_json = create_character(character_description.description)
     if not character_json:
         raise ValueError("LLM did not return a response")
+    if character_json.startswith("```"):
+        character_json = character_json.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     try:
         character = json.loads(character_json)
     except json.JSONDecodeError:
