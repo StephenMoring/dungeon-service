@@ -21,6 +21,22 @@ services:
     profiles: ["all", "noapp"]
     networks:
         - dungeon-service
+  flyway:
+    image: flyway/flyway:11-alpine
+    command: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/dungeon_pg_db
+      FLYWAY_USER: ${POSTGRES_USER}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    volumes:
+      - ../../db/migrations:/flyway/sql
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["all", "noapp"]
+    networks:
+      - dungeon-service
   app:
     image: dungeoncrawler:latest
     restart: always
