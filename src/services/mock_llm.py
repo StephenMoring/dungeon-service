@@ -75,10 +75,13 @@ NO_TOOL_SEQUENCES = {
 
 class MockAnthropicMessages:
     def create(self, *, messages, system=None, tools=None, **kwargs) -> Message:
+        def _content_type(c) -> str | None:
+            return c.get("type") if isinstance(c, dict) else getattr(c, "type", None)
+
         step = sum(
             1 for m in messages
             if isinstance(m.get("content"), list)
-            and any(c.get("type") == "tool_result" for c in m["content"])
+            and any(_content_type(c) == "tool_result" for c in m["content"])
         )
 
         if tools:

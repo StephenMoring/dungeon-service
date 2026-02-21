@@ -106,6 +106,31 @@ class TestCampaignCreation:
         assert isinstance(data["checkpoint_ids"], list)
 
 
+    def test_second_call_with_pydantic_content_returns_end_turn(self):
+        """dm_agent appends message.content (Pydantic objects) directly — step counter must handle both."""
+        from anthropic.types import ToolUseBlock
+        first_response = self.client.messages.create(
+            max_tokens=1024,
+            system=campaign_creation_prompt,
+            tools=self.tools,
+            messages=[{"role": "user", "content": "a dark gothic city"}],
+            model="mock",
+        )
+        messages = [
+            {"role": "user", "content": "a dark gothic city"},
+            {"role": "assistant", "content": first_response.content},  # Pydantic objects
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "mock_tool_use_01", "content": "[]"}]},
+        ]
+        response = self.client.messages.create(
+            max_tokens=1024,
+            system=campaign_creation_prompt,
+            tools=self.tools,
+            messages=messages,
+            model="mock",
+        )
+        assert response.stop_reason == "end_turn"
+
+
 class TestUnknownCallsRaise:
     def setup_method(self):
         self.client = MockAnthropicClient()
