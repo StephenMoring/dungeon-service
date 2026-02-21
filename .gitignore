@@ -14,3 +14,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Git worktrees
+.worktrees/
