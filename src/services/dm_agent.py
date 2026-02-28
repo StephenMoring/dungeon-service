@@ -3,7 +3,6 @@ from anthropic import Anthropic
 from anthropic.types import MessageParam, TextBlock, ToolUseBlock
 from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
 from src.services.prompts import (
-    master_system_prompt,
     campaign_creation_prompt,
     character_creation_prompt,
 )
