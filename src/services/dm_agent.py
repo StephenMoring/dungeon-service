@@ -8,11 +8,7 @@ from src.services.prompts import (
     character_creation_prompt,
 )
 
-if os.getenv("MOCK_LLM"):
-    from src.services.mock_llm import MockAnthropicClient
-    client = MockAnthropicClient()
-else:
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 
 def create_character(character_description):
