@@ -1,5 +1,4 @@
 import json
-from unittest.mock import MagicMock
 
 from src.services.dm_agent import create_campaign, create_character
 from tests.helpers import (
@@ -33,7 +32,7 @@ class TestCreateCharacter:
 
 class TestCreateCampaign:
     def test_tool_use_loop_returns_campaign_json(self, mocker):
-        session = MagicMock()
+        session = mocker.MagicMock()
         mocker.patch(
             "src.services.dm_agent.client.messages.create",
             side_effect=[
@@ -49,7 +48,7 @@ class TestCreateCampaign:
         assert result == MOCK_CAMPAIGN_JSON
 
     def test_search_checkpoints_called_with_tool_args(self, mocker):
-        session = MagicMock()
+        session = mocker.MagicMock()
         mocker.patch(
             "src.services.dm_agent.client.messages.create",
             side_effect=[
@@ -70,7 +69,7 @@ class TestCreateCampaign:
         )
 
     def test_llm_called_twice_for_tool_use_loop(self, mocker):
-        session = MagicMock()
+        session = mocker.MagicMock()
         mock_llm = mocker.patch(
             "src.services.dm_agent.client.messages.create",
             side_effect=[
