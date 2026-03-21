@@ -10,6 +10,30 @@ from src.services.prompts import (
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 
+CHARACTER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "hero_class": {"type": "string"},
+        "biography": {"type": "string"},
+        "age": {"type": "integer"},
+        "strength": {"type": "integer"},
+        "perception": {"type": "integer"},
+        "endurance": {"type": "integer"},
+        "charisma": {"type": "integer"},
+        "intelligence": {"type": "integer"},
+        "agility": {"type": "integer"},
+        "luck": {"type": "integer"},
+    },
+    "required": [
+        "name", "hero_class", "biography", "age",
+        "strength", "perception", "endurance", "charisma",
+        "intelligence", "agility", "luck",
+    ],
+    "additionalProperties": False,
+}
+
+
 def create_character(character_description):
     message = client.messages.create(
         max_tokens=175,
@@ -21,6 +45,7 @@ def create_character(character_description):
             }
         ],
         model="claude-sonnet-4-5-20250929",
+        output_config={"format": {"type": "json_schema", "schema": CHARACTER_SCHEMA}},
     )
     print(message)
     if message.content and isinstance(message.content[0], TextBlock):

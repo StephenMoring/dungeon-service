@@ -49,3 +49,12 @@ def create(campaign_description: CampaignDescriptionCreate, session: Session) ->
             return new_campaign.name
     except Exception as e:
         raise ValueError(f"failed to save Campaign and Checkpoints {e}") from e
+
+
+def take_turn(id: str, session: Session) -> str:
+    print(id)
+    # lookup campaign by the id passed in
+    # we'll need context of the player, current checkpoints, recent messages
+    #
+    #
+    return "played take_turn"

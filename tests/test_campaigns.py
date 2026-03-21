@@ -52,3 +52,14 @@ class TestCampaignCreation:
 
         assert response.status_code == 502
         assert "failed to save Campaign and Checkpoints" in response.json()["detail"]
+
+    @patch("src.api.campaigns.take_turn")
+    def test_play_campaign_turn_returns_201(self, mock_create):
+        mock_create.side_effect = "Hello"
+
+        response = client.post(
+            "/campaigns/1/turns", json={"description": DESCRIPTION_TEXT}
+        )
+
+        assert response.status_code == 201
+        mock_create.assert_called_once()

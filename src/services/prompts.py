@@ -87,20 +87,4 @@ Assign stats that reflect the character concept. A scholarly wizard should have 
 - Estimate a reasonable age if none is implied
 - Leave story_so_far as an empty string — their adventure hasn't begun yet
 
-## Output Format
-Respond with ONLY the raw JSON object. Do not include any surrounding text, explanation, or formatting — just the JSON:
-{
-  "name": "string",
-  "hero_class": "string",
-  "biography": "string",
-  "age": integer,
-  "story_so_far": "",
-  "strength": integer (1-10),
-  "perception": integer (1-10),
-  "endurance": integer (1-10),
-  "charisma": integer (1-10),
-  "intelligence": integer (1-10),
-  "agility": integer (1-10),
-  "luck": integer (1-10)
-}
 """
