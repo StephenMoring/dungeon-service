@@ -28,9 +28,10 @@ services:
       FLYWAY_URL: jdbc:postgresql://db:5432/dungeon_pg_db
       FLYWAY_USER: ${POSTGRES_USER}
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
-      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql,filesystem:/flyway/seeds
     volumes:
       - ../../db/migrations:/flyway/sql
+      - ../../db/seeds:/flyway/seeds
     depends_on:
       db:
         condition: service_healthy

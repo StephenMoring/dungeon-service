@@ -101,3 +101,12 @@ class TestCharacterCreation:
         )
         assert response.status_code == 502
         assert "LLM returned invalid json" in response.json()["detail"]
+
+    @patch("src.api.characters.take_turn")
+    def test_play_campaign_turn_returns_201(self, mock_create):
+        mock_create.side_effect = "Hello"
+
+        response = client.post("/characters/1/turns", json={"description": "hello"})
+
+        assert response.status_code == 201
+        mock_create.assert_called_once()

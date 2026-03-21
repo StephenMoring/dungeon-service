@@ -8,6 +8,7 @@ from src.services.dm_agent import create_campaign
 
 def create(campaign_description: CampaignDescriptionCreate, session: Session) -> str:
     campaign_json = create_campaign(campaign_description.description, session)
+    # TODO: will need to also pass in the character we are creating this campaign with
     if not campaign_json:
         raise ValueError("LLM did not return a response")
     if campaign_json.startswith("```"):
@@ -49,12 +50,3 @@ def create(campaign_description: CampaignDescriptionCreate, session: Session) ->
             return new_campaign.name
     except Exception as e:
         raise ValueError(f"failed to save Campaign and Checkpoints {e}") from e
-
-
-def take_turn(id: str, session: Session) -> str:
-    print(id)
-    # lookup campaign by the id passed in
-    # we'll need context of the player, current checkpoints, recent messages
-    #
-    #
-    return "played take_turn"

@@ -26,9 +26,17 @@ CHARACTER_SCHEMA = {
         "luck": {"type": "integer"},
     },
     "required": [
-        "name", "hero_class", "biography", "age",
-        "strength", "perception", "endurance", "charisma",
-        "intelligence", "agility", "luck",
+        "name",
+        "hero_class",
+        "biography",
+        "age",
+        "strength",
+        "perception",
+        "endurance",
+        "charisma",
+        "intelligence",
+        "agility",
+        "luck",
     ],
     "additionalProperties": False,
 }
@@ -95,3 +103,7 @@ def create_campaign(campaign_description, session):
             if message.content and isinstance(message.content[0], TextBlock):
                 return message.content[0].text
             break
+
+
+def take_turn(turn, session):
+    return "turn took"
