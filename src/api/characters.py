@@ -24,6 +24,14 @@ def create_character(
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@character_router.get("/{id}")
+def get_character(id: int, session: Session = Depends(get_session)):
+    character = session.get(Character, id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return character
+
+
 @character_router.post("/{id}/turns", status_code=201)
 def play_turn(
     id: int,  # what the hell do I take in here
