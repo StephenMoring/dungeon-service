@@ -119,9 +119,9 @@ class TestCharacterCreation:
 class TestStreamingTurn:
     """Tests for the streaming turn endpoint."""
 
-    @patch("src.api.characters.get_session")
+    @patch("src.api.characters.Session")
     @patch("src.api.characters.process_turn_stream")
-    def test_play_turn_stream_returns_200(self, mock_process_turn_stream, mock_get_session):
+    def test_play_turn_stream_returns_200(self, mock_process_turn_stream, mock_Session):
         """POST /characters/{id}/turns/stream should return 200 with streamed content."""
         from src.models.character import Character
         from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
@@ -169,7 +169,7 @@ class TestStreamingTurn:
         mock_persist_session.__enter__ = MagicMock(return_value=mock_persist_session)
         mock_persist_session.__exit__ = MagicMock(return_value=False)
 
-        mock_get_session.return_value = iter([mock_persist_session])
+        mock_Session.return_value = mock_persist_session
 
         with patch("src.api.characters.session", mock_session, create=True):
             from fastapi.testclient import TestClient
@@ -191,3 +191,5 @@ class TestStreamingTurn:
         assert response.status_code == 200
         assert "Hello" in response.text
         assert " world" in response.text
+        assert mock_persist_session.add.call_count == 2
+        mock_persist_session.commit.assert_called_once()

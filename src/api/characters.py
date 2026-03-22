@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select, col
-from src.db.db import get_session
+from src.db.db import get_session, engine
 from src.models.character import Character, CharacterDescriptionCreate
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
@@ -90,7 +90,7 @@ async def play_turn_stream(
             yield chunk
         # Persist after streaming completes using a fresh session
         response_text = "".join(full_response)
-        with next(get_session()) as persist_session:
+        with Session(engine) as persist_session:
             persist_session.add(MessageHistory(
                 campaign_id=campaign.id,
                 character_id=character.id,
