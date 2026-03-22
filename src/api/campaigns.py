@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 from src.db.db import get_session
-from src.models.campaign import CampaignDescriptionCreate
+from src.models.campaign import Campaign, CampaignDescriptionCreate
+from src.models.character import Character
 from src.services.campaign_service import create
 
 campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
@@ -16,3 +17,13 @@ def create_campaign(
         return create(campaign_description, session)
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@campaigns_router.get("/")
+def list_campaigns(session: Session = Depends(get_session)):
+    return session.exec(select(Campaign)).all()
+
+
+@campaigns_router.get("/{id}/characters")
+def list_characters(id: int, session: Session = Depends(get_session)):
+    return session.exec(select(Character).where(Character.campaign_id == id)).all()

@@ -47,6 +47,6 @@ def create(campaign_description: CampaignDescriptionCreate, session: Session) ->
 
             session.commit()
             session.refresh(new_campaign)
-            return new_campaign.name
+            return new_campaign
     except Exception as e:
         raise ValueError(f"failed to save Campaign and Checkpoints {e}") from e

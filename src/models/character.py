@@ -17,6 +17,7 @@ class CharacterCreate(CharacterBase):
 
 class CharacterDescriptionCreate(SQLModel):
     description: str
+    campaign_id: int
 
 
 # TODO: add inventory, status

@@ -16,6 +16,7 @@ def create(
         raise ValueError("LLM returned invalid json")
 
     character["description"] = character_description.description
+    character["campaign_id"] = character_description.campaign_id
     new_character = Character(**character)
     with session:
         session.add(new_character)
