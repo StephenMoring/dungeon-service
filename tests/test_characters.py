@@ -125,7 +125,6 @@ class TestStreamingTurn:
         """POST /characters/{id}/turns/stream should return 200 with streamed content."""
         from src.models.character import Character
         from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
-        from src.models.message_history import MessageHistory
         from unittest.mock import MagicMock
 
         async def mock_stream(*args, **kwargs):

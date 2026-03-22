@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.models.campaign import Campaign
-from src.models.character import Character
 
 client = TestClient(app)
 

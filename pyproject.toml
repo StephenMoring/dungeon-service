@@ -24,4 +24,9 @@ extraPaths = ["."]
 "src/models/*.py" = ["F821"]  # undefined-name — SQLAlchemy string references
 
 [dependency-groups]
-dev = ["httpx>=0.28.1", "pytest>=9.0.2", "pytest-mock>=3.14.0"]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-mock>=3.14.0",
+]
