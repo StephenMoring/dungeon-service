@@ -33,6 +33,7 @@ class TestCharacterCreation:
             "/characters",
             json={
                 "description": "Tall and ragged, with an aura of great wisdom. Slow to speak but all listen when he does",
+                "campaign_id": 1,
             },
         )
         assert response.status_code == 201
@@ -61,6 +62,7 @@ class TestCharacterCreation:
             "/characters",
             json={
                 "description": "lean and toned, his piercing eyes can see all",
+                "campaign_id": 1,
             },
         )
         data = response.json()
@@ -84,6 +86,7 @@ class TestCharacterCreation:
             "/characters",
             json={
                 "description": "A mysterious wanderer from the northern wastes",
+                "campaign_id": 1,
             },
         )
         assert response.status_code == 502
@@ -97,6 +100,7 @@ class TestCharacterCreation:
             "/characters",
             json={
                 "description": "A mysterious wanderer from the northern wastes",
+                "campaign_id": 1,
             },
         )
         assert response.status_code == 502
@@ -104,9 +108,9 @@ class TestCharacterCreation:
 
     @patch("src.api.characters.take_turn")
     def test_play_campaign_turn_returns_201(self, mock_create):
-        mock_create.side_effect = "Hello"
+        mock_create.return_value = "Hello"
 
-        response = client.post("/characters/1/turns", json={"description": "hello"})
+        response = client.post("/characters/1/turns", json={"message": "hello"})
 
         assert response.status_code == 201
         mock_create.assert_called_once()

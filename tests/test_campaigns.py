@@ -4,10 +4,23 @@ import src.models.campaign  # noqa: F401 - ensures Campaign is registered with S
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.models.campaign import Campaign
+from src.models.character import Character
 
 client = TestClient(app)
 
 DESCRIPTION_TEXT = "A dark gothic city riven by political scheming and ancient evil"
+
+
+def make_campaign(**kwargs) -> Campaign:
+    defaults = dict(
+        id=1,
+        name="Shadows Over Thornwall",
+        theme="A city teeters on the edge of civil war while something darker stirs beneath the streets.",
+        description=DESCRIPTION_TEXT,
+    )
+    defaults.update(kwargs)
+    return Campaign(**defaults)
 
 
 class TestCampaignCreation:
@@ -15,7 +28,7 @@ class TestCampaignCreation:
 
     @patch("src.api.campaigns.create")
     def test_create_campaign_returns_201(self, mock_create):
-        mock_create.return_value = "Shadows Over Thornwall"
+        mock_create.return_value = make_campaign()
 
         response = client.post("/campaigns/", json={"description": DESCRIPTION_TEXT})
 
@@ -24,11 +37,11 @@ class TestCampaignCreation:
 
     @patch("src.api.campaigns.create")
     def test_create_campaign_returns_name(self, mock_create):
-        mock_create.return_value = "Shadows Over Thornwall"
+        mock_create.return_value = make_campaign()
 
         response = client.post("/campaigns/", json={"description": DESCRIPTION_TEXT})
 
-        assert response.json() == "Shadows Over Thornwall"
+        assert response.json()["name"] == "Shadows Over Thornwall"
 
     def test_create_campaign_requires_description(self):
         response = client.post("/campaigns/", json={})
@@ -52,3 +65,35 @@ class TestCampaignCreation:
 
         assert response.status_code == 502
         assert "failed to save Campaign and Checkpoints" in response.json()["detail"]
+
+
+class TestListCampaigns:
+    """Tests for the GET /campaigns/ endpoint."""
+
+    @patch("src.api.campaigns.Session")
+    def test_list_campaigns_returns_200(self, _mock_session):
+        response = client.get("/campaigns/")
+
+        assert response.status_code == 200
+
+    @patch("src.api.campaigns.Session")
+    def test_list_campaigns_returns_a_list(self, _mock_session):
+        response = client.get("/campaigns/")
+
+        assert isinstance(response.json(), list)
+
+
+class TestListCampaignCharacters:
+    """Tests for the GET /campaigns/{id}/characters endpoint."""
+
+    @patch("src.api.campaigns.Session")
+    def test_list_campaign_characters_returns_200(self, _mock_session):
+        response = client.get("/campaigns/1/characters")
+
+        assert response.status_code == 200
+
+    @patch("src.api.campaigns.Session")
+    def test_list_campaign_characters_returns_a_list(self, _mock_session):
+        response = client.get("/campaigns/1/characters")
+
+        assert isinstance(response.json(), list)

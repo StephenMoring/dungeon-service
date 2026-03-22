@@ -37,7 +37,8 @@ class TestCharacterServiceCreate:
         session.refresh = MagicMock(side_effect=lambda c: setattr(c, "id", 1))
 
         description = CharacterDescriptionCreate(
-            description="A quick and cunning thief with sharp eyes"
+            description="A quick and cunning thief with sharp eyes",
+            campaign_id=1,
         )
         result = create(description, session)
 
@@ -52,7 +53,7 @@ class TestCharacterServiceCreate:
 
         session = MagicMock()
         description_text = "A quick and cunning thief with sharp eyes"
-        description = CharacterDescriptionCreate(description=description_text)
+        description = CharacterDescriptionCreate(description=description_text, campaign_id=1)
 
         result = create(description, session)
 
@@ -64,7 +65,7 @@ class TestCharacterServiceCreate:
 
         session = MagicMock()
         description_text = "A quick and cunning thief with sharp eyes"
-        description = CharacterDescriptionCreate(description=description_text)
+        description = CharacterDescriptionCreate(description=description_text, campaign_id=1)
 
         create(description, session)
 
@@ -76,7 +77,8 @@ class TestCharacterServiceCreate:
 
         session = MagicMock()
         description = CharacterDescriptionCreate(
-            description="A quick and cunning thief with sharp eyes"
+            description="A quick and cunning thief with sharp eyes",
+            campaign_id=1,
         )
 
         create(description, session)
@@ -91,7 +93,8 @@ class TestCharacterServiceCreate:
 
         session = MagicMock()
         description = CharacterDescriptionCreate(
-            description="A quick and cunning thief with sharp eyes"
+            description="A quick and cunning thief with sharp eyes",
+            campaign_id=1,
         )
 
         with pytest.raises(ValueError, match="LLM did not return a response"):
@@ -105,7 +108,8 @@ class TestCharacterServiceCreate:
 
         session = MagicMock()
         description = CharacterDescriptionCreate(
-            description="A quick and cunning thief with sharp eyes"
+            description="A quick and cunning thief with sharp eyes",
+            campaign_id=1,
         )
 
         with pytest.raises(ValueError, match="LLM did not return a response"):

@@ -6,7 +6,7 @@ from src.models.campaign import Campaign, CampaignCheckpoint, CampaignDescriptio
 from src.services.dm_agent import create_campaign
 
 
-def create(campaign_description: CampaignDescriptionCreate, session: Session) -> str:
+def create(campaign_description: CampaignDescriptionCreate, session: Session) -> Campaign:
     campaign_json = create_campaign(campaign_description.description, session)
     # TODO: will need to also pass in the character we are creating this campaign with
     if not campaign_json:

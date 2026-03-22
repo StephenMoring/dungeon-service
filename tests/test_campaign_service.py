@@ -49,7 +49,8 @@ class TestCampaignServiceCreate:
 
         result = create(description, session)
 
-        assert result == "Shadows Over Thornwall"
+        assert isinstance(result, Campaign)
+        assert result.name == "Shadows Over Thornwall"
 
     @patch("src.services.campaign_service.create_campaign")
     def test_create_passes_description_to_dm_agent(self, mock_create_campaign):
@@ -83,7 +84,8 @@ class TestCampaignServiceCreate:
 
         result = create(description, session)
 
-        assert result == "Shadows Over Thornwall"
+        assert isinstance(result, Campaign)
+        assert result.name == "Shadows Over Thornwall"
 
     @patch("src.services.campaign_service.create_campaign")
     def test_create_raises_when_llm_returns_none(self, mock_create_campaign):
