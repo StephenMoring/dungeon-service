@@ -70,14 +70,12 @@ class TestCampaignCreation:
 class TestListCampaigns:
     """Tests for the GET /campaigns/ endpoint."""
 
-    @patch("src.api.campaigns.Session")
-    def test_list_campaigns_returns_200(self, _mock_session):
+    def test_list_campaigns_returns_200(self):
         response = client.get("/campaigns/")
 
         assert response.status_code == 200
 
-    @patch("src.api.campaigns.Session")
-    def test_list_campaigns_returns_a_list(self, _mock_session):
+    def test_list_campaigns_returns_a_list(self):
         response = client.get("/campaigns/")
 
         assert isinstance(response.json(), list)
@@ -86,14 +84,12 @@ class TestListCampaigns:
 class TestListCampaignCharacters:
     """Tests for the GET /campaigns/{id}/characters endpoint."""
 
-    @patch("src.api.campaigns.Session")
-    def test_list_campaign_characters_returns_200(self, _mock_session):
+    def test_list_campaign_characters_returns_200(self):
         response = client.get("/campaigns/1/characters")
 
         assert response.status_code == 200
 
-    @patch("src.api.campaigns.Session")
-    def test_list_campaign_characters_returns_a_list(self, _mock_session):
+    def test_list_campaign_characters_returns_a_list(self):
         response = client.get("/campaigns/1/characters")
 
         assert isinstance(response.json(), list)
