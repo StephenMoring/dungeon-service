@@ -11,6 +11,7 @@ AI Dungeon Master - a FastAPI-based D&D game with an AI DM powered by Claude. Pl
 ```bash
 # Dependencies
 uv sync                              # Install dependencies
+uv sync --upgrade-package anthropic  # Upgrade anthropic SDK
 
 # Development
 uvicorn src.main:app --reload        # Start dev server locally
@@ -36,12 +37,14 @@ mypy src                             # Type check
 **Layered design**: FastAPI Routers → Service Layer → DM Agent → PostgreSQL
 
 **Key services in `src/services/`**:
-- `dm_agent.py` - Anthropic client, system prompts, and LLM creation functions (`create_character()`, `create_campaign()`). Uses tool_use loop for campaign creation.
+- `dm_agent.py` - Anthropic client, system prompts, and LLM functions (`create_character()`, `create_campaign()`, `process_turn()`). Uses tool_use loop for campaign creation. Uses `output_config` structured output for character creation.
+- `prompts.py` - All prompt strings and `build_turn_system_prompt()` which assembles campaign/character/checkpoint context
 - `campaign_service.py` - Calls dm_agent, parses LLM JSON response (strips markdown fences defensively), persists campaign + checkpoint links
 - `character_service.py` - Calls dm_agent, parses LLM JSON response, persists character
+- `turn_service.py` - Handles gameplay turns: loads character, campaign, active checkpoint, recent message history, calls `process_turn`, returns DM response
 
 **API routers in `src/api/`**:
-- `characters.py` - POST /characters/
+- `characters.py` - POST /characters/, POST /characters/{id}/turns
 - `campaigns.py` - POST /campaigns/
 
 **Config**: `src/config/config.py` — loads `ANTHROPIC_API_KEY` and `DATABASE_URL` from environment
@@ -54,6 +57,11 @@ mypy src                             # Type check
 - `character` - Player characters with 7 stats on 1-10 scale, FK to campaign
 - `checkpoint` - Pre-authored scenario checkpoints with tags; 20 seeded via Flyway
 - `campaigncheckpoint` - Join table linking campaigns to ordered checkpoints with status/summary
+- `message_history` - Per-turn conversation history (campaign_id, character_id, role, content, created_at)
+
+**Database migrations**:
+- `db/migrations/` — versioned schema migrations (run everywhere)
+- `db/seeds/` — repeatable seed data (`R__` prefix, local only); mounted separately in docker-compose
 
 **Data flow for campaign creation**:
 1. POST /campaigns/ → `campaign_service.create()`
@@ -62,12 +70,18 @@ mypy src                             # Type check
 4. Loop continues appending assistant + tool_result messages until `stop_reason == "end_turn"`
 5. Service parses final JSON, persists campaign + checkpoint associations
 
+**Data flow for taking a turn**:
+1. POST /characters/{id}/turns → `turn_service.take_turn()`
+2. Loads character → campaign → active checkpoint (first where status not in `complete`/`locked`) → last 10 messages
+3. Calls `dm_agent.process_turn()` with assembled context
+4. Returns DM response (message persistence not yet implemented)
+
 ## Tech Stack
 
 - **Python 3.12+**, FastAPI, SQLModel, psycopg2
 - **PostgreSQL** for data storage; **Flyway** (via Docker) for migrations
 - **Claude API** (`claude-sonnet-4-5-20250929` hardcoded in `dm_agent.py`) for DM responses
-- **Ruff** for linting/formatting, **mypy** for types, **pytest** + **httpx** for tests
+- **Ruff** for linting/formatting, **mypy** for types, **pytest** + **httpx** + **pytest-mock** for tests
 
 ## Environment Variables
 
@@ -78,18 +92,15 @@ Required in `.env`:
 
 ## Gotchas
 
-- **Markdown fence stripping**: LLM responses sometimes include ` ```json ``` ` fences; both service layers strip these before parsing
+- **Markdown fence stripping**: `campaign_service.py` defensively strips ` ```json ``` ` fences before JSON parsing; `character_service.py` does not (uses `output_config` structured output instead)
+- **`output_config` requires SDK >= 0.86.0**: Character creation uses `output_config` for structured JSON output — upgrade with `uv sync --upgrade-package anthropic` if Pyright complains
+- **Session lifecycle**: Do not use `with session:` in service functions that receive a FastAPI-injected session — FastAPI DI manages the lifecycle. Only use it when managing a session manually (e.g. inside tool handlers called outside the request lifecycle)
+- **`col()` for SQL expressions**: Use `col(Model.field)` when chaining SQL methods like `.not_in()`, `.contains()` — plain model fields are typed as Python types and won't have these methods
 - **F821 ruff suppression**: Model files use string forward references (e.g., `"Campaign"`) to avoid import loops — F821 errors are suppressed for those files
 - **Alembic in deps but unused**: Flyway handles migrations via Docker; Alembic is a leftover dependency
 
-## Future State
+## Next Up
 
-Planned features not yet implemented:
-
-**RAG / SRD Retrieval**:
-- `src/services/retrieval.py` - RAG pipeline: query embedding → pgvector similarity search → context ranking
-- `src/services/llm.py` - Standalone Claude API client for DM responses
-- `srd_embeddings` table - Chunked SRD content with vector embeddings (pgvector)
-- `message_history` table - Conversation persistence across sessions
-- `scripts/ingest_srd.py` - Script to embed SRD content into pgvector
-- `OPENAI_API_KEY` - Required once OpenAI text-embedding-3-small is integrated
+- Persist player + DM messages to `message_history` after each turn
+- Checkpoint completion detection (lightweight classifier LLM call after each turn)
+- Checkpoint advancement + summary generation

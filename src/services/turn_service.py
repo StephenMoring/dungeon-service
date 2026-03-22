@@ -2,9 +2,10 @@ from sqlmodel import Session, col, select
 from src.models.character import Character
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
+from src.services.dm_agent import process_turn
 
 
-def take_turn(id: str, session: Session) -> str:
+def take_turn(id: int, message: str, session: Session) -> str:
     character = session.get(Character, id)
     if not character:
         raise ValueError("campaign: {id} not found")
@@ -26,7 +27,9 @@ def take_turn(id: str, session: Session) -> str:
     if not current_campaign_checkpoint:
         raise ValueError("Checkpoint for campaign could not be found")
 
-    current_checkpoint_detail = session.get(Checkpoint, current_campaign_checkpoint.checkpoint_id)
+    current_checkpoint_detail = session.get(
+        Checkpoint, current_campaign_checkpoint.checkpoint_id
+    )
 
     recent_messages_statement = (
         select(MessageHistory)
@@ -37,11 +40,35 @@ def take_turn(id: str, session: Session) -> str:
     )
     recent_messages = list(reversed(session.exec(recent_messages_statement).all()))
 
-    print(character)
-    print(campaign)
-    print(current_checkpoint_detail)
-    print(recent_messages)
+    turn_request = {
+        "character": character,
+        "campaign": campaign,
+        "current_checkpoint": current_checkpoint_detail,
+        "recent_messages": recent_messages,
+        "message": message,
+    }
 
-    # make nice package to pass to dm
+    response = process_turn(turn_request, session)
 
-    return "played take_turn"
+    assert campaign.id is not None
+    assert character.id is not None
+
+    session.add(
+        MessageHistory(
+            campaign_id=campaign.id,
+            character_id=character.id,
+            role="user",
+            content=message,
+        )
+    )
+    session.add(
+        MessageHistory(
+            campaign_id=campaign.id,
+            character_id=character.id,
+            role="assistant",
+            content=response,
+        )
+    )
+    session.commit()
+
+    return response

@@ -1,4 +1,4 @@
-CREATE TABLE message_history (
+CREATE TABLE messagehistory (
     id SERIAL PRIMARY KEY,
     campaign_id INTEGER NOT NULL REFERENCES campaign(id),
     character_id INTEGER NOT NULL REFERENCES character(id),

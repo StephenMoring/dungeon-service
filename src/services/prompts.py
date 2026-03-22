@@ -59,6 +59,35 @@ Use these tags when calling search_checkpoints:
 **Situational**: urgent, timed, race, rival, fire, poison, ambush
 """
 
+
+def build_turn_system_prompt(campaign, character, checkpoint) -> str:
+    checkpoint_section = ""
+    if checkpoint:
+        checkpoint_section = f"""
+## Current Scenario
+**{checkpoint.title}**
+{checkpoint.description}
+
+**Setting**: {checkpoint.setting}
+**Objective**: {checkpoint.objective}
+{"**Key NPCs**: " + checkpoint.key_npcs if checkpoint.key_npcs else ""}
+"""
+
+    return f"""{master_system_prompt}
+## Active Campaign
+**{campaign.name}**
+{campaign.theme}
+
+{campaign.description}
+
+## Player Character
+**{character.name}** — {character.hero_class}, age {character.age}
+{character.biography}
+
+**Stats**: STR {character.strength} | PER {character.perception} | END {character.endurance} | CHA {character.charisma} | INT {character.intelligence} | AGI {character.agility} | LCK {character.luck}
+{checkpoint_section}"""
+
+
 character_creation_prompt = """You are a character creation assistant for a narrative RPG. Given a character description and optionally a biography and/or class, generate a complete character sheet as a JSON object.
 
 ## Your Task
