@@ -85,25 +85,24 @@ async def play_turn_stream(
     full_response = []
 
     async def generate():
-        async for chunk in process_turn_stream(turn, session):
+        async for chunk in process_turn_stream(turn):
             full_response.append(chunk)
             yield chunk
-        # Persist after streaming completes
+        # Persist after streaming completes using a fresh session
         response_text = "".join(full_response)
-        assert campaign.id is not None
-        assert character.id is not None
-        session.add(MessageHistory(
-            campaign_id=campaign.id,
-            character_id=character.id,
-            role="user",
-            content=turn_request.message,
-        ))
-        session.add(MessageHistory(
-            campaign_id=campaign.id,
-            character_id=character.id,
-            role="assistant",
-            content=response_text,
-        ))
-        session.commit()
+        with next(get_session()) as persist_session:
+            persist_session.add(MessageHistory(
+                campaign_id=campaign.id,
+                character_id=character.id,
+                role="user",
+                content=turn_request.message,
+            ))
+            persist_session.add(MessageHistory(
+                campaign_id=campaign.id,
+                character_id=character.id,
+                role="assistant",
+                content=response_text,
+            ))
+            persist_session.commit()
 
     return StreamingResponse(generate(), media_type="text/plain")

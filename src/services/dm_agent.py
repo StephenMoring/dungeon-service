@@ -122,8 +122,6 @@ def process_turn(turn: dict, session) -> str:
     ]
     messages.append({"role": "user", "content": player_message})
 
-    print(system_prompt)
-    print(messages)
     response = client.messages.create(
         model="claude-sonnet-4-5-20250929",
         max_tokens=1025,
@@ -136,7 +134,7 @@ def process_turn(turn: dict, session) -> str:
     raise ValueError("DM did not return a response")
 
 
-async def process_turn_stream(turn: dict, session) -> AsyncGenerator[str, None]:
+async def process_turn_stream(turn: dict) -> AsyncGenerator[str, None]:
     character = turn["character"]
     campaign = turn["campaign"]
     checkpoint = turn["current_checkpoint"]
