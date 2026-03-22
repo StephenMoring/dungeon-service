@@ -1,13 +1,16 @@
 import os
-from anthropic import Anthropic
+from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types import MessageParam, TextBlock, ToolUseBlock
+from typing import AsyncGenerator
 from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
 from src.services.prompts import (
+    build_turn_system_prompt,
     campaign_creation_prompt,
     character_creation_prompt,
 )
 
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+async_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 
 CHARACTER_SCHEMA = {
@@ -105,5 +108,53 @@ def create_campaign(campaign_description, session):
             break
 
 
-def take_turn(turn, session):
-    return "turn took"
+def process_turn(turn: dict, session) -> str:
+    character = turn["character"]
+    campaign = turn["campaign"]
+    checkpoint = turn["current_checkpoint"]
+    recent_messages = turn["recent_messages"]
+    player_message = turn["message"]
+
+    system_prompt = build_turn_system_prompt(campaign, character, checkpoint)
+
+    messages: list[MessageParam] = [
+        {"role": msg.role, "content": msg.content} for msg in recent_messages
+    ]
+    messages.append({"role": "user", "content": player_message})
+
+    print(system_prompt)
+    print(messages)
+    response = client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1025,
+        system=system_prompt,
+        messages=messages,
+    )
+
+    if response.content and isinstance(response.content[0], TextBlock):
+        return response.content[0].text
+    raise ValueError("DM did not return a response")
+
+
+async def process_turn_stream(turn: dict, session) -> AsyncGenerator[str, None]:
+    character = turn["character"]
+    campaign = turn["campaign"]
+    checkpoint = turn["current_checkpoint"]
+    recent_messages = turn["recent_messages"]
+    player_message = turn["message"]
+
+    system_prompt = build_turn_system_prompt(campaign, character, checkpoint)
+
+    messages: list[MessageParam] = [
+        {"role": msg.role, "content": msg.content} for msg in recent_messages
+    ]
+    messages.append({"role": "user", "content": player_message})
+
+    async with async_client.messages.stream(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1025,
+        system=system_prompt,
+        messages=messages,
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text
