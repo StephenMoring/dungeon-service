@@ -124,7 +124,7 @@ def process_turn(turn: dict, session) -> str:
 
     response = client.messages.create(
         model="claude-sonnet-4-5-20250929",
-        max_tokens=1025,
+        max_tokens=400,
         system=system_prompt,
         messages=messages,
     )
@@ -150,7 +150,7 @@ async def process_turn_stream(turn: dict) -> AsyncGenerator[str, None]:
 
     async with async_client.messages.stream(
         model="claude-sonnet-4-5-20250929",
-        max_tokens=1025,
+        max_tokens=400,
         system=system_prompt,
         messages=messages,
     ) as stream:
