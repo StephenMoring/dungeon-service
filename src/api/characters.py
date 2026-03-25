@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select, col
+from src.api.dependencies import get_current_user
 from src.db.db import get_session, engine
 from src.models.character import Character, CharacterDescriptionCreate
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
 from src.models.turn import TurnRequest
+from src.models.user import User
 from src.services.character_service import create
 from src.services.turn_service import take_turn
 from src.services.dm_agent import process_turn_stream
@@ -17,6 +19,7 @@ character_router = APIRouter(prefix="/characters", tags=["characters"])
 def create_character(
     character_description: CharacterDescriptionCreate,
     session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
 ):
     try:
         return create(character_description, session)
@@ -25,7 +28,11 @@ def create_character(
 
 
 @character_router.get("/{id}")
-def get_character(id: int, session: Session = Depends(get_session)):
+def get_character(
+    id: int,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
+):
     character = session.get(Character, id)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
@@ -37,6 +44,7 @@ def play_turn(
     id: int,  # what the hell do I take in here
     turn_request: TurnRequest,
     session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
 ):
     try:
         return take_turn(id, turn_request.message, session)

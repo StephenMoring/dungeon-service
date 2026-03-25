@@ -40,3 +40,11 @@ CREATE TABLE campaigncheckpoint (
     status TEXT NOT NULL DEFAULT 'locked',
     summary TEXT
 );
+
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  discord_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  avatar_url TEXT,
+  created_at TIMESTAMP DEFAULT TIMEZONE('utc', NOW())
+)
