@@ -1,6 +1,7 @@
 import json
-from sqlmodel import Session
-from src.models.character import Character, CharacterDescriptionCreate
+from sqlmodel import Session, select
+from src.models.campaign import Campaign
+from src.models.character import Character, CharacterDescriptionCreate, HeroClass
 from src.models.user import User
 from src.services.dm_agent import create_character
 
@@ -60,3 +61,17 @@ def create_preview(character_description: CharacterDescriptionCreate) -> dict:
     # generate image too?
 
     return character
+
+
+def get_user_characters(session: Session, user: User):
+    statement = (
+        select(Character, Campaign)
+        .join(Campaign, Character.campaign_id == Campaign.id, isouter=True)
+        .where(Character.user_id == user.id)
+    )
+    results = session.exec(statement).all()
+    return [{"character": char, "campaign": campaign} for char, campaign in results]
+
+
+def get_hero_classes(session: Session):
+    return session.exec(select(HeroClass)).all()

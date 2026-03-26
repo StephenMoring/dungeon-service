@@ -1,4 +1,8 @@
-TRUNCATE TABLE campaigncheckpoint, character, checkpoint, campaign RESTART IDENTITY CASCADE;
+TRUNCATE TABLE campaigncheckpoint, character, checkpoint, campaign, "user" RESTART IDENTITY CASCADE;
+
+-- Seed user
+INSERT INTO "user" (discord_id, username, avatar_url) VALUES
+('000000000000000001', 'seed_user', NULL);
 
 -- Checkpoints
 INSERT INTO checkpoint (title, description, setting, key_npcs, objective, tags) VALUES
@@ -182,14 +186,13 @@ INSERT INTO campaign (name, theme, description) VALUES
 );
 
 -- Characters
-INSERT INTO character (name, hero_class, biography, description, age, campaign_id, strength, perception, endurance, charisma, intelligence, agility, luck) VALUES
+INSERT INTO character (name, hero_class, biography, description, age, campaign_id, user_id, strength, perception, endurance, charisma, intelligence, agility, luck) VALUES
 (
     'Darian Ashveil',
     'Rogue',
     'Darian grew up picking pockets in the port city of Calrath, eventually graduating to larger scores for a thieves'' guild that taught him everything before betraying him. He left the city with nothing but his knives and a long memory.',
     'A lean, sharp-eyed man with close-cropped dark hair and a habit of sitting with his back to walls. Quick with a smile that rarely reaches his eyes.',
-    31,
-    1,
+    31, 1, 1,
     4, 8, 5, 7, 6, 9, 7
 ),
 (
@@ -197,8 +200,7 @@ INSERT INTO character (name, hero_class, biography, description, age, campaign_i
     'Warrior',
     'Bryndis served fifteen years as a shield-bearer in the northern legions before a political purge forced her out with a scar and a grudge. She now sells her sword to causes that feel worth bleeding for.',
     'A broad-shouldered woman with iron-grey hair worn in tight braids, a shield strapped to her back, and the measured movements of someone who has survived too many battles to be careless.',
-    42,
-    2,
+    42, 2, 1,
     9, 6, 8, 5, 4, 5, 4
 ),
 (
@@ -206,8 +208,7 @@ INSERT INTO character (name, hero_class, biography, description, age, campaign_i
     'Mage',
     'Sollux studied at the Conclave of Veth for twelve years before his experiments attracted the wrong kind of attention and his licence to practice was revoked. He has since learned that understanding magic and following its rules are different things.',
     'A tall, distracted man in his mid-thirties with mismatched eyes — one brown, one an unsettling amber — and ink-stained fingers that are rarely still.',
-    35,
-    3,
+    35, 3, 1,
     3, 7, 4, 5, 10, 6, 5
 ),
 (
@@ -215,8 +216,7 @@ INSERT INTO character (name, hero_class, biography, description, age, campaign_i
     'Ranger',
     'Fenn was raised in a logging community on the edge of a vast old-growth forest that the community slowly destroyed. He chose the forest. He has not spoken to his family since.',
     'A quiet, weathered young man who moves without sound and watches without seeming to. Dressed in earthy browns and greens, with a shortbow always within reach and an expression that is more comfortable with trees than people.',
-    24,
-    2,
+    24, 2, 1,
     6, 9, 7, 3, 6, 8, 5
 ),
 (
@@ -224,8 +224,7 @@ INSERT INTO character (name, hero_class, biography, description, age, campaign_i
     'Cleric',
     'Celestine was a promising novice at the Temple of the Pale Dawn until a crisis of faith drove her into the streets, where she found the goddess was easier to believe in when people actually needed saving. She carries her holy symbol like a question she hasn''t answered yet.',
     'A composed woman in her late twenties with careful posture and kind eyes that miss very little. Her robes are well-worn and her hands are practiced at both prayer and bandaging wounds.',
-    28,
-    1,
+    28, 1, 1,
     5, 6, 6, 8, 7, 5, 6
 );
 

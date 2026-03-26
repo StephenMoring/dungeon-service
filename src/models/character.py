@@ -1,6 +1,7 @@
 from typing import Optional
 
-from sqlmodel import Field, Relationship, SQLModel
+from httpx._transports import default
+from sqlmodel import Field, Relationship, SQLModel, table
 
 
 class CharacterBase(SQLModel):
@@ -40,3 +41,15 @@ class Character(CharacterBase, table=True):
     intelligence: int | None
     agility: int | None
     luck: int | None
+
+
+class HeroClass(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    class_name: str
+    description: str
+
+
+class Race(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    race: str
+    description: str
