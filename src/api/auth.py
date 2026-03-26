@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 from src.db.db import get_session
+from src.models.user import CallBackCode
 from src.services.auth_service import add_user, create_jwt
 import httpx
 from src.config import (
@@ -13,7 +14,7 @@ auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @auth_router.post("/discord/callback", status_code=201)
-async def discord_callback(code: str, session: Session = Depends(get_session)):
+async def discord_callback(code: CallBackCode, session: Session = Depends(get_session)):
     async with httpx.AsyncClient() as client:  # type: ignore[reportGeneralTypeIssues]
         response = await client.post(
             "https://discord.com/api/oauth2/token",
@@ -21,7 +22,7 @@ async def discord_callback(code: str, session: Session = Depends(get_session)):
                 "client_id": DISCORD_CLIENT_ID,
                 "client_secret": DISCORD_CLIENT_SECRET,
                 "grant_type": "authorization_code",
-                "code": code,
+                "code": code.code,
                 "redirect_uri": DISCORD_REDIRECT_URI,
             },
         )
@@ -46,4 +47,4 @@ async def discord_callback(code: str, session: Session = Depends(get_session)):
         assert user.id is not None
         token = create_jwt(user.id)
 
-        return {"access_token": token, "token_type": "bearer"}
+        return {"jwt": token, "user": user}

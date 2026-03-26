@@ -16,10 +16,8 @@ async_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 CHARACTER_SCHEMA = {
     "type": "object",
     "properties": {
-        "name": {"type": "string"},
-        "hero_class": {"type": "string"},
-        "biography": {"type": "string"},
         "age": {"type": "integer"},
+        "biography": {"type": "string"},
         "strength": {"type": "integer"},
         "perception": {"type": "integer"},
         "endurance": {"type": "integer"},
@@ -29,10 +27,8 @@ CHARACTER_SCHEMA = {
         "luck": {"type": "integer"},
     },
     "required": [
-        "name",
-        "hero_class",
-        "biography",
         "age",
+        "biography",
         "strength",
         "perception",
         "endurance",

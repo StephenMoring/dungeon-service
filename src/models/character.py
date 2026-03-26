@@ -16,14 +16,17 @@ class CharacterCreate(CharacterBase):
 
 
 class CharacterDescriptionCreate(SQLModel):
+    name: str
     description: str
-    campaign_id: int
+    hero_class: str
+    race: str
 
 
 # TODO: add inventory, status
 class Character(CharacterBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     campaign_id: int | None = Field(default=None, foreign_key="campaign.id")
+    user_id: int = Field(foreign_key="user.id")
     campaign: Optional["Campaign"] = Relationship(back_populates="characters")  # type: ignore[name-defined]
     # name: str
     # hero_class: str

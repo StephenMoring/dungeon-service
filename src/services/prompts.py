@@ -94,7 +94,7 @@ def build_turn_system_prompt(campaign, character, checkpoint) -> str:
 {checkpoint_section}"""
 
 
-character_creation_prompt = """You are a character creation assistant for a narrative RPG. Given a character description and optionally a biography and/or class, generate a complete character sheet as a JSON object.
+character_creation_prompt = """You are a character creation assistant for a narrative RPG. Given a name, a character description, a class, a race, and optionally a biography, generate a complete character sheet as a JSON object.
 
 ## Your Task
 Analyze the provided character details and produce stats and missing fields that fit the character concept. Infer personality, background, and abilities from context clues in the description and biography.

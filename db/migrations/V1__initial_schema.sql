@@ -1,3 +1,11 @@
+CREATE TABLE "user" (
+  id SERIAL PRIMARY KEY,
+  discord_id TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL,
+  avatar_url TEXT,
+  created_at TIMESTAMP DEFAULT TIMEZONE('utc', NOW())
+);
+
 CREATE TABLE campaign (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -13,6 +21,7 @@ CREATE TABLE character (
     description TEXT NOT NULL,
     age INTEGER NOT NULL,
     campaign_id INTEGER REFERENCES campaign(id),
+    user_id INTEGER NOT NULL REFERENCES "user"(id),
     strength INTEGER,
     perception INTEGER,
     endurance INTEGER,
@@ -40,11 +49,3 @@ CREATE TABLE campaigncheckpoint (
     status TEXT NOT NULL DEFAULT 'locked',
     summary TEXT
 );
-
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  discord_id TEXT NOT NULL,
-  username TEXT NOT NULL,
-  avatar_url TEXT,
-  created_at TIMESTAMP DEFAULT TIMEZONE('utc', NOW())
-)

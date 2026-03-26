@@ -8,7 +8,7 @@ from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
 from src.models.turn import TurnRequest
 from src.models.user import User
-from src.services.character_service import create
+from src.services.character_service import create, create_preview
 from src.services.turn_service import take_turn
 from src.services.dm_agent import process_turn_stream
 
@@ -17,12 +17,23 @@ character_router = APIRouter(prefix="/characters", tags=["characters"])
 
 @character_router.post("/", status_code=201)
 def create_character(
-    character_description: CharacterDescriptionCreate,
+    character: Character,
     session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return create(character, session, user)
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@character_router.post("/preview", status_code=201)
+def create_character_preview(
+    character_description: CharacterDescriptionCreate,
     _: User = Depends(get_current_user),
 ):
     try:
-        return create(character_description, session)
+        return create_preview(character_description)
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
