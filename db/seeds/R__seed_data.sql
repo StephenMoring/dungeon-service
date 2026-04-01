@@ -1,4 +1,30 @@
-TRUNCATE TABLE campaigncheckpoint, character, checkpoint, campaign, "user" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE campaigncheckpoint, character, checkpoint, campaign, "user", heroclass, race RESTART IDENTITY CASCADE;
+
+-- Hero Classes
+INSERT INTO heroclass (class_name, description) VALUES
+('Warrior',     'A master of martial combat, trained in a wide variety of weapons and armour. Relies on strength, endurance, and battlefield experience.'),
+('Rogue',       'A cunning opportunist who uses stealth, trickery, and precision strikes. Thrives in shadows and excels at getting into places they shouldn''t be.'),
+('Mage',        'A scholar of arcane forces who bends the laws of reality through study and willpower. Fragile but devastating when prepared.'),
+('Ranger',      'A survivalist and hunter equally at home in wilderness and dungeon. Skilled with a bow, tracking, and reading the natural world.'),
+('Cleric',      'A divine conduit who draws power from faith. Can heal allies, repel the undead, and call down the wrath of their deity.'),
+('Paladin',     'A holy warrior bound by sacred oath. Combines martial prowess with divine magic, serving as both sword and shield for the righteous.'),
+('Bard',        'A performer and jack-of-all-trades who weaves magic through music and words. Inspires allies, manipulates enemies, and always has a plan.'),
+('Druid',       'A guardian of the natural world who channels primal magic. Can shapeshift, commune with animals, and call on the forces of nature.'),
+('Monk',        'A disciplined warrior who has mastered the flow of inner energy. Fights without weapons, moves faster than thought, and strikes with precision.'),
+('Warlock',     'A mortal who has struck a bargain with a powerful entity for arcane power. The magic is potent, the patron''s motives are unclear.');
+
+-- Races
+INSERT INTO race (race, description) VALUES
+('Human',       'Adaptable and ambitious, humans are found in every corner of the world. Their short lives drive them to achieve quickly — for better and worse.'),
+('Elf',         'Long-lived and perceptive, elves move through the world with grace and memory stretching back centuries. They notice what others miss.'),
+('Dwarf',       'Stout and enduring, dwarves are built for hardship. Deeply loyal to clan and craft, with a stubbornness that outlasts most problems.'),
+('Halfling',    'Small, lucky, and surprisingly hard to intimidate. Halflings have a gift for slipping through trouble and making friends in unlikely places.'),
+('Gnome',       'Curious and inventive, gnomes approach every problem as a puzzle worth solving. Their enthusiasm is infectious; their attention span is not.'),
+('Half-Elf',    'Caught between two worlds, half-elves carry the charm of humans and the perception of elves, along with a lifelong sense of not quite belonging.'),
+('Half-Orc',    'Powerful and resilient, half-orcs carry orcish strength into a world that often judges them on sight. They are harder to kill than most things.'),
+('Tiefling',    'Descendants of an infernal bloodline, tieflings bear horns, tails, and the weight of suspicion. Many are defined by the prejudice they overcome.'),
+('Dragonborn',  'Proud and disciplined, dragonborn carry the legacy of dragons in their blood and breath. Honour and lineage shape everything they do.'),
+('Orc',         'Fierce and direct, orcs value strength, honesty, and action over words. Often misunderstood, they bring raw power and fierce loyalty to any group.');
 
 -- Seed user
 INSERT INTO "user" (discord_id, username, avatar_url) VALUES

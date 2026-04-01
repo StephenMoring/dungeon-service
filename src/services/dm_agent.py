@@ -60,6 +60,19 @@ def create_character(character_description):
         return message_text
 
 
+CAMPAIGN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "theme": {"type": "string"},
+        "checkpoint_ids": {"type": "array", "items": {"type": "integer"}},
+        "opening_message": {"type": "string"},
+    },
+    "required": ["name", "theme", "checkpoint_ids", "opening_message"],
+    "additionalProperties": False,
+}
+
+
 def create_campaign(campaign_description, session):
     tools = [search_checkpoints_tool]
     messages: list[MessageParam] = [{"role": "user", "content": campaign_description}]
@@ -71,6 +84,7 @@ def create_campaign(campaign_description, session):
             tools=tools,
             messages=messages,
             model="claude-sonnet-4-5-20250929",
+            output_config={"format": {"type": "json_schema", "schema": CAMPAIGN_SCHEMA}},
         )
 
         if message.stop_reason == "tool_use":

@@ -51,8 +51,8 @@ campaign_creation_prompt = """You are a campaign architect for a narrative RPG. 
 {
   "name": "string — an evocative campaign title",
   "theme": "string — one sentence describing the campaign's core narrative tension",
-  "description": "string — 2-4 sentences describing the campaign setting and tone",
-  "checkpoint_ids": [integer, ...] — ordered list of checkpoint IDs selected from the search results
+  "checkpoint_ids": [integer, ...] — ordered list of checkpoint IDs selected from the search results,
+  "opening_message": "string — the DM's opening narration to begin the adventure. 1-2 paragraphs, second person, vivid and atmospheric, ending with a clear prompt for the player"
 }
 
 ## Tag Reference
@@ -94,10 +94,10 @@ def build_turn_system_prompt(campaign, character, checkpoint) -> str:
 {checkpoint_section}"""
 
 
-character_creation_prompt = """You are a character creation assistant for a narrative RPG. Given a name, a character description, a class, a race, and optionally a biography, generate a complete character sheet as a JSON object.
+character_creation_prompt = """You are a character creation assistant for a narrative RPG. Given a name, a character description, a class, a race, generate a complete character sheet as a JSON object.
 
 ## Your Task
-Analyze the provided character details and produce stats and missing fields that fit the character concept. Infer personality, background, and abilities from context clues in the description and biography.
+Analyze the provided character details and produce stats an age, and a biography that fit the character concept. Infer personality, background, and abilities from context clues in the description and other parameters.
 
 ## Stat Guidelines
 All stats use a 1-10 scale where 5 is an average person:
@@ -113,13 +113,12 @@ Assign stats that reflect the character concept. A scholarly wizard should have 
 
 ## Rules
 - If no class is provided, infer one that fits the description (e.g. warrior, mage, rogue, ranger, cleric, bard, etc.)
-- If no biography is provided, write a biography that fits the description and class
+- write a biography that fits the description and class
 - Biography must be 2-3 sentences and no more than 200 characters
 - Biography should only cover backstory before the adventure begins — no current events, no plot hooks
 - Write biography in third person past tense
 - Do not invent locations, organizations, or relationships not implied by the player's description
-- Generate a name if none is provided
-- Estimate a reasonable age if none is implied
+- Estimate a reasonable age
 - Leave story_so_far as an empty string — their adventure hasn't begun yet
 
 """

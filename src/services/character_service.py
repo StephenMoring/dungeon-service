@@ -1,27 +1,14 @@
 import json
-from sqlmodel import Session, select
+from collections.abc import Sequence
+from sqlmodel import Session, select, col
 from src.models.campaign import Campaign
-from src.models.character import Character, CharacterDescriptionCreate, HeroClass
+from src.models.character import Character, CharacterDescriptionCreate, HeroClass, Race
+from src.models.message_history import MessageHistory
 from src.models.user import User
 from src.services.dm_agent import create_character
 
 
 def create(character: Character, session: Session, user: User) -> Character:
-    # character_json = create_character(character_description.description)
-    # if not character_json:
-    #     raise ValueError("LLM did not return a response")
-    # try:
-    #     character = json.loads(character_json)
-    # except json.JSONDecodeError:
-    #     raise ValueError("LLM returned invalid json")
-
-    # character["description"] = character_description.description
-    # with session:
-    #     session.add(new_character)
-    #     session.commit()
-    #     session.refresh(new_character)
-    #     return new_character
-
     assert user.id is not None
     character.user_id = user.id
     session.add(character)
@@ -38,40 +25,33 @@ def create_preview(character_description: CharacterDescriptionCreate) -> dict:
         raise ValueError("LLM did not return a response")
     try:
         stats_and_age = json.loads(stats_and_age_json)
+        return stats_and_age
     except json.JSONDecodeError:
         raise ValueError("LLM returned invalid json")
 
-    character = {}
-    # character["description"] = character_description.description
-    # character["name"] = character_description.name
-    # character["hero_class"] = character_description.hero_class
-    # character["race"] = character_description.race
-
-    character["biography"] = stats_and_age.biography
-    character["age"] = stats_and_age.age
-    character["strength"] = stats_and_age.strength
-    character["perception"] = stats_and_age.perception
-    character["endurance"] = stats_and_age.endurance
-    character["charisma"] = stats_and_age.charisma
-    character["intelligence"] = stats_and_age.intelligence
-    character["agility"] = stats_and_age.agility
-    character["luck"] = stats_and_age.luck
-
-    # to allow campaign_id to be null now and create after.
-    # generate image too?
-
-    return character
-
 
 def get_user_characters(session: Session, user: User):
+    print("fetching user's characters from db")
     statement = (
         select(Character, Campaign)
-        .join(Campaign, Character.campaign_id == Campaign.id, isouter=True)
+        .outerjoin(Campaign, col(Character.campaign_id) == Campaign.id)
         .where(Character.user_id == user.id)
     )
     results = session.exec(statement).all()
     return [{"character": char, "campaign": campaign} for char, campaign in results]
 
 
-def get_hero_classes(session: Session):
+def get_hero_classes(session: Session) -> Sequence[HeroClass]:
     return session.exec(select(HeroClass)).all()
+
+
+def get_all_races(session: Session) -> Sequence[Race]:
+    return session.exec(select(Race)).all()
+
+
+def get_character_turns(character_id: int, session: Session) -> Sequence[MessageHistory]:
+    return session.exec(
+        select(MessageHistory)
+        .where(MessageHistory.character_id == character_id)
+        .order_by(col(MessageHistory.created_at))
+    ).all()

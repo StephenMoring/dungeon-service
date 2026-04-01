@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from src.db.db import get_session
-from src.models.campaign import Campaign, CampaignDescriptionCreate
+from src.models.campaign import Campaign, CreateCampaignResponse, CreateCampaignRequest
 from src.models.character import Character
 from src.models.user import User
 from src.api.dependencies import get_current_user
@@ -12,12 +12,12 @@ campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 @campaigns_router.post("/", status_code=201)
 def create_campaign(
-    campaign_description: CampaignDescriptionCreate,
+    campaign_description: CreateCampaignRequest,
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
-):
+    user: User = Depends(get_current_user),
+) -> CreateCampaignResponse:
     try:
-        return create(campaign_description, session)
+        return create(campaign_description, session, user)
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

@@ -2,10 +2,11 @@ from sqlmodel import Session, col, select
 from src.models.character import Character
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
+from src.models.user import User
 from src.services.dm_agent import process_turn
 
 
-def take_turn(id: int, message: str, session: Session) -> str:
+def take_turn(id: int, message: str, session: Session, user: User) -> str:
     character = session.get(Character, id)
     if not character:
         raise ValueError("campaign: {id} not found")

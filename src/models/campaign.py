@@ -2,8 +2,25 @@ from typing import Optional
 from sqlmodel import Field, Relationship, SQLModel
 
 
-class CampaignDescriptionCreate(SQLModel):
+class Campaign(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    characters: list["Character"] = Relationship(back_populates="campaign")  # type: ignore[name-defined]
+    theme: str
+    campaign_checkpoints: list["CampaignCheckpoint"] = Relationship(
+        back_populates="campaign"
+    )
     description: str
+
+
+class CreateCampaignRequest(SQLModel):
+    character_id: int
+    description: str
+
+
+class CreateCampaignResponse(SQLModel):
+    campaign: Campaign
+    opening_message: str
 
 
 class Checkpoint(SQLModel, table=True):
@@ -25,17 +42,6 @@ class CampaignCheckpoint(SQLModel, table=True):
     order: int
     status: str = Field(default="locked")
     summary: str | None = None
-
-
-class Campaign(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    name: str
-    characters: list["Character"] = Relationship(back_populates="campaign")  # type: ignore[name-defined]
-    theme: str
-    campaign_checkpoints: list["CampaignCheckpoint"] = Relationship(
-        back_populates="campaign"
-    )
-    description: str
 
 
 # potential link table if many to many relationship for characters and campaigns

@@ -1,52 +1,70 @@
-# TODO: campaign service layer for storing messages and updating character stats.
-
 import json
 from sqlmodel import Session
-from src.models.campaign import Campaign, CampaignCheckpoint, CampaignDescriptionCreate
+from src.models.campaign import (
+    Campaign,
+    CampaignCheckpoint,
+    CreateCampaignResponse,
+    CreateCampaignRequest,
+)
+from src.models.character import Character
+from src.models.message_history import MessageHistory
+from src.models.user import User
 from src.services.dm_agent import create_campaign
 
 
-def create(campaign_description: CampaignDescriptionCreate, session: Session) -> Campaign:
+def create(
+    campaign_description: CreateCampaignRequest, session: Session, user: User
+) -> CreateCampaignResponse:
+    character = session.get(Character, campaign_description.character_id)
+    if not character:
+        raise ValueError("Character not found")
+    if character.user_id != user.id:
+        raise ValueError("Character does not belong to this user")
+
     campaign_json = create_campaign(campaign_description.description, session)
-    # TODO: will need to also pass in the character we are creating this campaign with
     if not campaign_json:
         raise ValueError("LLM did not return a response")
-    if campaign_json.startswith("```"):
-        campaign_json = (
-            campaign_json.strip()
-            .removeprefix("```json")
-            .removeprefix("```")
-            .removesuffix("```")
-            .strip()
-        )
+
     try:
         campaign = json.loads(campaign_json)
     except json.JSONDecodeError:
         raise ValueError("LLM returned invalid json")
 
-    campaign["description"] = campaign_description.description
     checkpoint_ids = campaign.pop("checkpoint_ids")
-    new_campaign = Campaign(**campaign)
-    try:
-        with session:
-            session.add(new_campaign)
-            session.flush()
+    opening_message = campaign.pop("opening_message")
+    new_campaign = Campaign(**campaign, description=campaign_description.description)
 
-            if not new_campaign.id:
-                raise ValueError("campaign failed to create")
+    session.add(new_campaign)
+    session.flush()
 
-            for order, id in enumerate(checkpoint_ids):
-                new_campaign_checkpoint = CampaignCheckpoint(
-                    campaign_id=new_campaign.id,
-                    checkpoint_id=id,
-                    campaign=new_campaign,
-                    order=order,
-                    status="new",
-                )
-                session.add(new_campaign_checkpoint)
+    if not new_campaign.id:
+        raise ValueError("campaign failed to create")
 
-            session.commit()
-            session.refresh(new_campaign)
-            return new_campaign
-    except Exception as e:
-        raise ValueError(f"failed to save Campaign and Checkpoints {e}") from e
+    for order, checkpoint_id in enumerate(checkpoint_ids):
+        session.add(
+            CampaignCheckpoint(
+                campaign_id=new_campaign.id,
+                checkpoint_id=checkpoint_id,
+                order=order,
+                status="new" if order == 0 else "locked",
+            )
+        )
+
+    character.campaign_id = new_campaign.id
+    session.add(character)
+
+    assert character.id is not None
+    session.add(
+        MessageHistory(
+            campaign_id=new_campaign.id,
+            character_id=character.id,
+            role="assistant",
+            content=opening_message,
+        )
+    )
+
+    session.commit()
+    session.refresh(new_campaign)
+    return CreateCampaignResponse(
+        campaign=new_campaign, opening_message=opening_message
+    )
