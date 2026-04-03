@@ -1,10 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-from sqlmodel import Session, select, col
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from sqlmodel import Session
 from src.api.dependencies import get_current_user
-from src.db.db import get_session, engine
+from src.db.db import get_session
 from src.models.character import Character, CharacterDescriptionCreate, HeroClass, Race
-from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
 from src.models.turn import TurnRequest, TurnResponse
 from src.models.user import User
@@ -16,8 +14,8 @@ from src.services.character_service import (
     get_hero_classes,
     get_user_characters,
 )
+from src.services.embedding_service import extract_and_store_memories
 from src.services.turn_service import take_turn
-from src.services.dm_agent import process_turn_stream
 from collections.abc import Sequence
 
 character_router = APIRouter(prefix="/characters", tags=["characters"])
@@ -100,6 +98,7 @@ def get_turns(
 def play_turn(
     id: int,
     turn_request: TurnRequest,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ) -> TurnResponse:
@@ -109,78 +108,13 @@ def play_turn(
     if character.user_id != user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     try:
-        return TurnResponse(message=take_turn(id, turn_request.message, session, user))
+        message = take_turn(id, turn_request.message, session, user)
+        assert character.campaign_id is not None
+        background_tasks.add_task(
+            extract_and_store_memories,
+            character.campaign_id,
+            [turn_request.message, message],
+        )
+        return TurnResponse(message=message)
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
-
-
-# @character_router.post("/{id}/turns/stream")
-# async def play_turn_stream(
-#     id: int,
-#     turn_request: TurnRequest,
-#     session: Session = Depends(get_session),
-# ):
-#     character = session.get(Character, id)
-#     if not character:
-#         raise HTTPException(status_code=404, detail=f"Character {id} not found")
-#
-#     campaign = session.get(Campaign, character.campaign_id)
-#     if not campaign:
-#         raise HTTPException(status_code=404, detail="Campaign not found")
-#
-#     statement = (
-#         select(CampaignCheckpoint)
-#         .where(CampaignCheckpoint.campaign_id == campaign.id)
-#         .where(col(CampaignCheckpoint.status).not_in(["campaign", "locked"]))
-#         .order_by(col(CampaignCheckpoint.order))
-#         .limit(1)
-#     )
-#     current_campaign_checkpoint = session.exec(statement).first()
-#     if not current_campaign_checkpoint:
-#         raise HTTPException(status_code=404, detail="No active checkpoint found")
-#
-#     current_checkpoint_detail = session.get(
-#         Checkpoint, current_campaign_checkpoint.checkpoint_id
-#     )
-#
-#     recent_messages_statement = (
-#         select(MessageHistory)
-#         .where(MessageHistory.campaign_id == campaign.id)
-#         .where(MessageHistory.character_id == character.id)
-#         .order_by(col(MessageHistory.created_at).desc())
-#         .limit(10)
-#     )
-#     recent_messages = list(reversed(session.exec(recent_messages_statement).all()))
-#
-#     turn = {
-#         "character": character,
-#         "campaign": campaign,
-#         "current_checkpoint": current_checkpoint_detail,
-#         "recent_messages": recent_messages,
-#         "message": turn_request.message,
-#     }
-#
-#     full_response = []
-#
-#     async def generate():
-#         async for chunk in process_turn_stream(turn):
-#             full_response.append(chunk)
-#             yield chunk
-#         # Persist after streaming completes using a fresh session
-#         response_text = "".join(full_response)
-#         with Session(engine) as persist_session:
-#             persist_session.add(MessageHistory(
-#                 campaign_id=campaign.id,
-#                 character_id=character.id,
-#                 role="user",
-#                 content=turn_request.message,
-#             ))
-#             persist_session.add(MessageHistory(
-#                 campaign_id=campaign.id,
-#                 character_id=character.id,
-#                 role="assistant",
-#                 content=response_text,
-#             ))
-#             persist_session.commit()
-#
-#     return StreamingResponse(generate(), media_type="text/plain")

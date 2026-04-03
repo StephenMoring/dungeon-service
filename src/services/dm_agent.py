@@ -7,6 +7,7 @@ from src.services.prompts import (
     build_turn_system_prompt,
     campaign_creation_prompt,
     character_creation_prompt,
+    memory_extraction_prompt,
 )
 
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -84,7 +85,9 @@ def create_campaign(campaign_description, session):
             tools=tools,
             messages=messages,
             model="claude-sonnet-4-5-20250929",
-            output_config={"format": {"type": "json_schema", "schema": CAMPAIGN_SCHEMA}},
+            output_config={
+                "format": {"type": "json_schema", "schema": CAMPAIGN_SCHEMA}
+            },
         )
 
         if message.stop_reason == "tool_use":
@@ -116,6 +119,86 @@ def create_campaign(campaign_description, session):
             if message.content and isinstance(message.content[0], TextBlock):
                 return message.content[0].text
             break
+
+
+MEMORIES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "npcs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "role": {"type": "string"},
+                    "disposition": {"type": "string"},
+                    "known_facts": {"type": "string"},
+                    "secrets": {"type": "string"},
+                },
+                "required": ["name", "role", "disposition", "known_facts", "secrets"],
+                "additionalProperties": False,
+            },
+        },
+        "locations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "events": {"type": "string"},
+                },
+                "required": ["name", "description", "events"],
+                "additionalProperties": False,
+            },
+        },
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "where_found": {"type": "string"},
+                    "status": {"type": "string", "enum": ["held", "lost", "used", "given away"]},
+                },
+                "required": ["name", "description", "where_found", "status"],
+                "additionalProperties": False,
+            },
+        },
+        "events": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string"},
+                    "category": {"type": "string", "enum": ["decision", "revelation", "deal", "consequence"]},
+                },
+                "required": ["summary", "category"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["npcs", "locations", "items", "events"],
+    "additionalProperties": False,
+}
+
+
+def extract_memories(player_message: str, dm_message: str) -> str | None:
+    prompt = memory_extraction_prompt.format(
+        player_message=player_message,
+        dm_message=dm_message,
+    )
+    message = client.messages.create(
+        max_tokens=1024,
+        system=prompt,
+        messages=[{"role": "user", "content": "Extract memories from this exchange."}],
+        model="claude-sonnet-4-5-20250929",
+        output_config={"format": {"type": "json_schema", "schema": MEMORIES_SCHEMA}},
+    )
+    if message.content and isinstance(message.content[0], TextBlock):
+        return message.content[0].text
+    return None
 
 
 def process_turn(turn: dict, session) -> str:
