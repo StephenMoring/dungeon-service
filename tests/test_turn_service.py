@@ -3,7 +3,6 @@ from dataclasses import asdict
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy.dialects import postgresql
 
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.character import Character
@@ -16,7 +15,7 @@ from src.services.turn_service import (
 )
 from src.tools.dice_tools import RollResult
 from src.services.embedding_service import extract_and_store_memories
-from tests.conftest import make_character
+from tests.conftest import compiled_sql, make_character
 
 
 def make_session(character=None, campaign=None, checkpoint_link=None, history=()):
@@ -46,14 +45,6 @@ def default_session(**overrides):
     )
     kwargs.update(overrides)
     return make_session(**kwargs)
-
-
-def compiled_sql(statement) -> str:
-    return str(
-        statement.compile(
-            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
-        )
-    )
 
 
 class TestLoadTurnContext:

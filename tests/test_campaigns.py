@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from src.models.campaign import Campaign, CreateCampaignResponse
-from tests.conftest import make_character
+from tests.conftest import compiled_sql, make_character
 
 DESCRIPTION_TEXT = "A dark gothic city riven by political scheming and ancient evil"
 CREATE_BODY = {"character_id": 1, "description": DESCRIPTION_TEXT}
@@ -57,6 +57,15 @@ class TestListCampaigns:
         assert response.status_code == 200
         assert response.json()[0]["name"] == "Shadows Over Thornwall"
 
+    def test_only_lists_campaigns_with_the_users_characters(self, client, session):
+        session.exec.return_value.all.return_value = []
+
+        client.get("/campaigns/")
+
+        sql = compiled_sql(session.exec.call_args.args[0])
+        assert "JOIN character ON character.campaign_id = campaign.id" in sql
+        assert "character.user_id = 1" in sql
+
 
 class TestListCampaignCharacters:
     def test_returns_characters(self, client, session):
@@ -66,3 +75,12 @@ class TestListCampaignCharacters:
 
         assert response.status_code == 200
         assert response.json()[0]["name"] == "Gandalf"
+
+    def test_only_lists_the_users_characters(self, client, session):
+        session.exec.return_value.all.return_value = []
+
+        client.get("/campaigns/5/characters")
+
+        sql = compiled_sql(session.exec.call_args.args[0])
+        assert "character.campaign_id = 5" in sql
+        assert "character.user_id = 1" in sql

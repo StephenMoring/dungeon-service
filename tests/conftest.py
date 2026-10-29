@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 import src.models.campaign  # noqa: F401 - ensures Campaign is registered with SQLAlchemy
 from src.api.dependencies import get_current_user
@@ -58,3 +59,12 @@ def make_character(**kwargs) -> Character:
     )
     defaults.update(kwargs)
     return Character(**defaults)
+
+
+def compiled_sql(statement) -> str:
+    """Render a SQLModel statement as Postgres SQL with literal values, for asserting filters."""
+    return str(
+        statement.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )

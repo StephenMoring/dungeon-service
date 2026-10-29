@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 from src.db.db import get_session
 from src.models.campaign import Campaign, CreateCampaignResponse, CreateCampaignRequest
 from src.models.character import Character
@@ -24,15 +24,25 @@ def create_campaign(
 
 @campaigns_router.get("/")
 def list_campaigns(
-    session: Session = Depends(get_session), _: User = Depends(get_current_user)
+    session: Session = Depends(get_session), user: User = Depends(get_current_user)
 ):
-    return session.exec(select(Campaign)).all()
+    # Campaigns have no owner column; a campaign belongs to whoever owns its character.
+    return session.exec(
+        select(Campaign)
+        .join(Character, col(Character.campaign_id) == Campaign.id)
+        .where(Character.user_id == user.id)
+        .distinct()
+    ).all()
 
 
 @campaigns_router.get("/{id}/characters")
 def list_characters(
     id: int,
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    return session.exec(select(Character).where(Character.campaign_id == id)).all()
+    return session.exec(
+        select(Character).where(
+            Character.campaign_id == id, Character.user_id == user.id
+        )
+    ).all()
