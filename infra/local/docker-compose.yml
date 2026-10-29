@@ -2,7 +2,7 @@ networks:
   dungeon-service:
 services:
   db:
-    image: postgres:16.2-alpine
+    image: pgvector/pgvector:pg16
     restart: always
     container_name: local_dungeon_pg_db
     ports:

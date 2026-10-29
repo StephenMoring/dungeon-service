@@ -4,103 +4,76 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI Dungeon Master - a FastAPI-based D&D game with an AI DM powered by Claude. Players create characters, start campaigns, and engage in text-based adventures with accurate D&D 5e rules.
+AI Dungeon Master backend: a FastAPI service where players sign in with Discord, generate characters, start campaigns built from pre-authored checkpoints, and play a text adventure narrated by Claude. Characters use a custom 7-stat system (1-10 scale), not D&D 5e. The frontend is the sibling repo `../dungeon-web`.
+
+See `README.md` for the API surface and local setup.
+
+## How We Work
+
+- AI-driven and fast: build features end to end, push until something breaks, then fix it. This is no longer a step-by-step learning project.
+- Design specs and plans go in `docs/plans/` or `docs/superpowers/`. Both are gitignored, so they stay local working notes and never get committed.
+- Keep `README.md`, `docs/architecture.md` (Mermaid C4 diagrams, committed), and this file accurate when behavior changes. Update the diagrams when containers, external systems, or service boundaries change. Update the README's Roadmap section when features land.
 
 ## Commands
 
 ```bash
-# Dependencies
 uv sync                              # Install dependencies
 uv sync --upgrade-package anthropic  # Upgrade anthropic SDK
 
-# Development
-uvicorn src.main:app --reload        # Start dev server locally
 make lr                              # Start postgres+flyway, run uvicorn locally
-make lr-down                         # Tear down local env
-make dr                              # Full docker run (API + DB)
-make dr-down                         # Tear down docker env
+make lr-down                         # Tear down local env (wipes db volume)
+make dr / make dr-down               # Full docker stack (API + DB)
 
-# Docker (compose file is at infra/local/docker-compose.yml)
-docker-compose -f infra/local/docker-compose.yml --profile noapp up   # DB + migrations only
-docker-compose -f infra/local/docker-compose.yml --profile all up     # Full environment
-
-# Testing & Quality
-pytest                               # Run tests
-pytest tests/test_file.py::test_name # Run single test
-ruff check .                         # Lint
-ruff format .                        # Format
-mypy src                             # Type check
+uv run pytest                        # Run tests
+uv run pytest tests/test_file.py::test_name
+uv run ruff check . && uv run ruff format .
+uv run mypy src
 ```
 
 ## Architecture
 
-**Layered design**: FastAPI Routers → Service Layer → DM Agent → PostgreSQL
+**Layered design**: FastAPI routers (`src/api/`) → services (`src/services/`) → `dm_agent.py` (Claude) → PostgreSQL + pgvector
 
-**Key services in `src/services/`**:
-- `dm_agent.py` - Anthropic client, system prompts, and LLM functions (`create_character()`, `create_campaign()`, `process_turn()`). Uses tool_use loop for campaign creation. Uses `output_config` structured output for character creation.
-- `prompts.py` - All prompt strings and `build_turn_system_prompt()` which assembles campaign/character/checkpoint context
-- `campaign_service.py` - Calls dm_agent, parses LLM JSON response (strips markdown fences defensively), persists campaign + checkpoint links
-- `character_service.py` - Calls dm_agent, parses LLM JSON response, persists character
-- `turn_service.py` - Handles gameplay turns: loads character, campaign, active checkpoint, recent message history, calls `process_turn`, returns DM response
+**Services**:
+- `dm_agent.py` - Anthropic clients and all LLM calls: `create_character()` (structured output via `output_config`), `create_campaign()` (tool_use loop), `process_turn()`, `process_turn_stream()` (not wired to a route), `extract_memories()`
+- `prompts.py` - Prompt strings and `build_turn_system_prompt()` (campaign + character + checkpoint context)
+- `turn_service.py` - Loads character → campaign → active checkpoint → last 10 messages, calls `process_turn`, persists user + assistant messages to `messagehistory`
+- `embedding_service.py` - `extract_and_store_memories()` runs as a FastAPI BackgroundTask after each turn: extracts NPC/location/item/event memories, embeds with Voyage `voyage-3.5` (1024 dims), upserts by name per campaign
+- `campaign_service.py` - Verifies the requesting user owns `character_id`, calls `create_campaign`, persists the campaign + ordered checkpoints (first `new`, rest `locked`), assigns the character to it, and saves the opening message as the first assistant `messagehistory` row
+- `character_service.py` - `create_preview()` generates a sheet via dm_agent without saving; `create()` saves a client-submitted character for the current user
+- `auth_service.py` - Discord user upsert, JWT create/validate (`SECRET_KEY`)
 
-**API routers in `src/api/`**:
-- `characters.py` - POST /characters/, POST /characters/{id}/turns
-- `campaigns.py` - POST /campaigns/
+**Auth**: `src/api/dependencies.py:get_current_user` validates the Bearer JWT; all routes except `/health` and `/auth/*` depend on it. Character routes also check `character.user_id == user.id`.
 
-**Config**: `src/config/config.py` — loads `ANTHROPIC_API_KEY` and `DATABASE_URL` from environment
+**Tools**: `src/tools/campaign_tools.py` - `search_checkpoints` tool definition + handler used during campaign creation
 
-**Tools in `src/tools/`**:
-- `campaign_tools.py` - Anthropic tool_use definition for `search_checkpoints` + handler; used by dm_agent during campaign creation
+**Database tables**: `user`, `campaign`, `character`, `checkpoint`, `campaigncheckpoint` (ordered checkpoints per campaign with status/summary), `heroclass`, `race`, `messagehistory`, and memory tables `npcmemory`, `locationmemory`, `itemmemory`, `eventmemory` (each with `vector(1024)` + HNSW cosine index)
 
-**Database tables**:
-- `campaign` - Campaign metadata (name, theme, description)
-- `character` - Player characters with 7 stats on 1-10 scale, FK to campaign
-- `checkpoint` - Pre-authored scenario checkpoints with tags; 20 seeded via Flyway
-- `campaigncheckpoint` - Join table linking campaigns to ordered checkpoints with status/summary
-- `message_history` - Per-turn conversation history (campaign_id, character_id, role, content, created_at)
+**Migrations**: `db/migrations/` versioned (`V*`, run everywhere); `db/seeds/` repeatable (`R__`, local only, mounted separately in docker-compose)
 
-**Database migrations**:
-- `db/migrations/` — versioned schema migrations (run everywhere)
-- `db/seeds/` — repeatable seed data (`R__` prefix, local only); mounted separately in docker-compose
+## Testing
 
-**Data flow for campaign creation**:
-1. POST /campaigns/ → `campaign_service.create()`
-2. Calls `dm_agent.create_campaign()` — enters tool_use loop with Anthropic API
-3. Claude calls `search_checkpoints` tool → handler queries DB by tags → results returned
-4. Loop continues appending assistant + tool_result messages until `stop_reason == "end_turn"`
-5. Service parses final JSON, persists campaign + checkpoint associations
-
-**Data flow for taking a turn**:
-1. POST /characters/{id}/turns → `turn_service.take_turn()`
-2. Loads character → campaign → active checkpoint (first where status not in `complete`/`locked`) → last 10 messages
-3. Calls `dm_agent.process_turn()` with assembled context
-4. Returns DM response (message persistence not yet implemented)
+- Tests never hit a real DB or LLM. `tests/conftest.py` provides `client` (auth + session overridden via `app.dependency_overrides`), `anon_client` (real JWT auth, mocked session), `session` (MagicMock), `user`, and `make_character()`
+- Patch service functions where the router imports them (e.g. `src.api.characters.take_turn`)
+- Always patch `src.api.characters.extract_and_store_memories` in turn route tests. TestClient runs background tasks, so an unpatched turn test calls Claude and Voyage for real
+- `src/config` raises at import if env vars are missing, so `.env` must exist to run tests
 
 ## Tech Stack
 
-- **Python 3.12+**, FastAPI, SQLModel, psycopg2
-- **PostgreSQL** for data storage; **Flyway** (via Docker) for migrations
-- **Claude API** (`claude-sonnet-4-5-20250929` hardcoded in `dm_agent.py`) for DM responses
-- **Ruff** for linting/formatting, **mypy** for types, **pytest** + **httpx** + **pytest-mock** for tests
+- Python 3.12+, FastAPI, SQLModel, psycopg2, pgvector
+- Claude model `claude-sonnet-4-5-20250929` is hardcoded in several places in `dm_agent.py`
+- Voyage AI for embeddings; Discord OAuth + PyJWT for auth
 
 ## Environment Variables
 
-Required in `.env`:
-- `ANTHROPIC_API_KEY` - Claude API access
-- `DATABASE_URL` - PostgreSQL connection string
-- `POSTGRES_USER` / `POSTGRES_PASSWORD` - Used by docker-compose
+All required (loaded in `src/config/config.py`, which raises at import if any are missing): `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `DATABASE_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `SECRET_KEY`. docker-compose also needs `POSTGRES_USER` / `POSTGRES_PASSWORD`.
 
 ## Gotchas
 
-- **Markdown fence stripping**: `campaign_service.py` defensively strips ` ```json ``` ` fences before JSON parsing; `character_service.py` does not (uses `output_config` structured output instead)
-- **`output_config` requires SDK >= 0.86.0**: Character creation uses `output_config` for structured JSON output — upgrade with `uv sync --upgrade-package anthropic` if Pyright complains
-- **Session lifecycle**: Do not use `with session:` in service functions that receive a FastAPI-injected session — FastAPI DI manages the lifecycle. Only use it when managing a session manually (e.g. inside tool handlers called outside the request lifecycle)
-- **`col()` for SQL expressions**: Use `col(Model.field)` when chaining SQL methods like `.not_in()`, `.contains()` — plain model fields are typed as Python types and won't have these methods
-- **F821 ruff suppression**: Model files use string forward references (e.g., `"Campaign"`) to avoid import loops — F821 errors are suppressed for those files
-- **Alembic in deps but unused**: Flyway handles migrations via Docker; Alembic is a leftover dependency
-
-## Next Up
-
-- Persist player + DM messages to `message_history` after each turn
-- Checkpoint completion detection (lightweight classifier LLM call after each turn)
-- Checkpoint advancement + summary generation
+- **Structured output everywhere**: character, campaign, and memory extraction all use `output_config` JSON schemas (`CHARACTER_SCHEMA`, `CAMPAIGN_SCHEMA`, `MEMORIES_SCHEMA` in `dm_agent.py`), so services `json.loads` directly with no fence stripping
+- **`output_config` requires SDK >= 0.86.0**: upgrade with `uv sync --upgrade-package anthropic` if Pyright complains
+- **Session lifecycle**: Don't use `with session:` on a FastAPI-injected session. Background tasks and tool handlers run outside the request, so they open their own `Session(engine)`
+- **`col()` for SQL expressions**: Use `col(Model.field)` for `.not_in()`, `.contains()`, etc.
+- **F821 ruff suppression**: Model files use string forward refs (e.g. `"Campaign"`); F821 is suppressed for `src/models/*.py`
+- **Alembic in deps but unused**: Flyway handles migrations
+- **Typer in deps but unused**: leftover from the original CLI plan

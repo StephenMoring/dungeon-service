@@ -1,21 +1,17 @@
 from unittest.mock import patch
 
-import src.models.campaign  # noqa: F401 - ensures Campaign is registered with SQLAlchemy
-from fastapi.testclient import TestClient
-
-from src.main import app
-from src.models.campaign import Campaign
-
-client = TestClient(app)
+from src.models.campaign import Campaign, CreateCampaignResponse
+from tests.conftest import make_character
 
 DESCRIPTION_TEXT = "A dark gothic city riven by political scheming and ancient evil"
+CREATE_BODY = {"character_id": 1, "description": DESCRIPTION_TEXT}
 
 
 def make_campaign(**kwargs) -> Campaign:
     defaults = dict(
         id=1,
         name="Shadows Over Thornwall",
-        theme="A city teeters on the edge of civil war while something darker stirs beneath the streets.",
+        theme="A city teeters on the edge of civil war.",
         description=DESCRIPTION_TEXT,
     )
     defaults.update(kwargs)
@@ -23,72 +19,50 @@ def make_campaign(**kwargs) -> Campaign:
 
 
 class TestCampaignCreation:
-    """Tests for the POST /campaigns/ endpoint."""
-
     @patch("src.api.campaigns.create")
-    def test_create_campaign_returns_201(self, mock_create):
-        mock_create.return_value = make_campaign()
+    def test_returns_201_with_campaign_and_opening(self, mock_create, client, user):
+        mock_create.return_value = CreateCampaignResponse(
+            campaign=make_campaign(), opening_message="You arrive at dusk."
+        )
 
-        response = client.post("/campaigns/", json={"description": DESCRIPTION_TEXT})
+        response = client.post("/campaigns/", json=CREATE_BODY)
 
         assert response.status_code == 201
-        mock_create.assert_called_once()
+        body = response.json()
+        assert body["campaign"]["name"] == "Shadows Over Thornwall"
+        assert body["opening_message"] == "You arrive at dusk."
+        assert mock_create.call_args.args[2] is user
 
-    @patch("src.api.campaigns.create")
-    def test_create_campaign_returns_name(self, mock_create):
-        mock_create.return_value = make_campaign()
-
-        response = client.post("/campaigns/", json={"description": DESCRIPTION_TEXT})
-
-        assert response.json()["name"] == "Shadows Over Thornwall"
-
-    def test_create_campaign_requires_description(self):
+    def test_requires_description_and_character(self, client):
         response = client.post("/campaigns/", json={})
 
         assert response.status_code == 422
 
     @patch("src.api.campaigns.create")
-    def test_create_campaign_returns_502_when_llm_fails(self, mock_create):
+    def test_returns_502_when_service_fails(self, mock_create, client):
         mock_create.side_effect = ValueError("LLM did not return a response")
 
-        response = client.post("/campaigns/", json={"description": DESCRIPTION_TEXT})
+        response = client.post("/campaigns/", json=CREATE_BODY)
 
         assert response.status_code == 502
-        assert "LLM did not return a response" in response.json()["detail"]
-
-    @patch("src.api.campaigns.create")
-    def test_create_campaign_returns_502_when_db_fails(self, mock_create):
-        mock_create.side_effect = ValueError("failed to save Campaign and Checkpoints")
-
-        response = client.post("/campaigns/", json={"description": DESCRIPTION_TEXT})
-
-        assert response.status_code == 502
-        assert "failed to save Campaign and Checkpoints" in response.json()["detail"]
+        assert response.json()["detail"] == "LLM did not return a response"
 
 
 class TestListCampaigns:
-    """Tests for the GET /campaigns/ endpoint."""
+    def test_returns_campaigns(self, client, session):
+        session.exec.return_value.all.return_value = [make_campaign()]
 
-    def test_list_campaigns_returns_200(self):
         response = client.get("/campaigns/")
 
         assert response.status_code == 200
-
-    def test_list_campaigns_returns_a_list(self):
-        response = client.get("/campaigns/")
-
-        assert isinstance(response.json(), list)
+        assert response.json()[0]["name"] == "Shadows Over Thornwall"
 
 
 class TestListCampaignCharacters:
-    """Tests for the GET /campaigns/{id}/characters endpoint."""
+    def test_returns_characters(self, client, session):
+        session.exec.return_value.all.return_value = [make_character()]
 
-    def test_list_campaign_characters_returns_200(self):
         response = client.get("/campaigns/1/characters")
 
         assert response.status_code == 200
-
-    def test_list_campaign_characters_returns_a_list(self):
-        response = client.get("/campaigns/1/characters")
-
-        assert isinstance(response.json(), list)
+        assert response.json()[0]["name"] == "Gandalf"

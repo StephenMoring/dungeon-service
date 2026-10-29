@@ -9,17 +9,17 @@ from src.services.dm_agent import process_turn
 def take_turn(id: int, message: str, session: Session, user: User) -> str:
     character = session.get(Character, id)
     if not character:
-        raise ValueError("campaign: {id} not found")
+        raise ValueError(f"Character {id} not found")
 
     campaign = session.get(Campaign, character.campaign_id)
     if not campaign:
-        raise ValueError("Character: {character.campaign_id} not found")
+        raise ValueError(f"Campaign {character.campaign_id} not found")
 
     # grab the first checkpoint that is not complete from the campaign
     statement = (
         select(CampaignCheckpoint)
         .where(CampaignCheckpoint.campaign_id == campaign.id)
-        .where(col(CampaignCheckpoint.status).not_in(["campaign", "locked"]))
+        .where(col(CampaignCheckpoint.status).not_in(["complete", "locked"]))
         .order_by(col(CampaignCheckpoint.order))
         .limit(1)
     )

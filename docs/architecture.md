@@ -1,210 +1,187 @@
 # Architecture
 
-## System Overview
+C4 diagrams for the dungeon service. They're written in Mermaid and render on GitHub. Update them when containers, external systems, or service boundaries change.
 
-A CLI-based D&D dungeon master powered by an LLM with RAG-based rulebook retrieval.
-Players describe their character, engage in a chat-based campaign with an AI dungeon master,
-and the DM references the official SRD (System Reference Document) for accurate rulings.
+## Level 1: System Context
 
-## Architecture Diagram
+```mermaid
+C4Context
+  title System Context: AI Dungeon Master
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                          CLI Client                              │
-│                    (Python - Click/Typer)                        │
-└──────────────────────────────┬───────────────────────────────────┘
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                         FastAPI Backend                          │
-│                                                                  │
-│  ┌────────────────┐  ┌────────────────┐  ┌───────────────────┐   │
-│  │   Campaign     │  │   Character    │  │     Session       │   │
-│  │   Router       │  │   Router       │  │     Router        │   │
-│  └───────┬────────┘  └───────┬────────┘  └─────────┬─────────┘   │
-│          │                   │                     │             │
-│          └───────────────────┼─────────────────────┘             │
-│                              ▼                                   │
-│  ┌───────────────────────────────────────────────────────────┐   │
-│  │                     DM Agent Service                      │   │
-│  │                                                           │   │
-│  │   - Manages conversation state                            │   │
-│  │   - Constructs prompts with persona + context             │   │
-│  │   - Orchestrates retrieval and LLM calls                  │   │
-│  └───────────────────────┬───────────────────────────────────┘   │
-│                          │                                       │
-│            ┌─────────────┴─────────────┐                         │
-│            ▼                           ▼                         │
-│  ┌──────────────────┐       ┌────────────────────┐               │
-│  │ Retrieval Service│       │    LLM Service     │               │
-│  │                  │       │                    │               │
-│  │ - Query embedding│       │ - Claude/OpenAI    │               │
-│  │ - Vector search  │       │ - Prompt assembly  │               │
-│  │ - Context ranking│       │ - Response parsing │               │
-│  └────────┬─────────┘       └─────────┬──────────┘               │
-│           │                           │                          │
-│           │                           ▼                          │
-│           │                 ┌────────────────────┐               │
-│           │                 │  External LLM API  │               │
-│           │                 │ (Anthropic/OpenAI) │               │
-│           │                 └────────────────────┘               │
-│           │                                                      │
-│           ▼                                                      │
-│  ┌──────────────────┐       ┌────────────────────┐               │
-│  │ Embedding Service│──────▶│ OpenAI Embeddings  │               │
-│  └────────┬─────────┘       └────────────────────┘               │
-│           │                                                      │
-└───────────┼──────────────────────────────────────────────────────┘
-            │
-            ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                   PostgreSQL + pgvector                          │
-│                                                                  │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌────────────────────┐  │
-│  │    campaigns    │ │   characters    │ │  message_history   │  │
-│  │                 │ │                 │ │                    │  │
-│  │ - id            │ │ - id            │ │ - id               │  │
-│  │ - name          │ │ - campaign_id   │ │ - campaign_id      │  │
-│  │ - created_at    │ │ - name          │ │ - role             │  │
-│  │ - summary       │ │ - description   │ │ - content          │  │
-│  └─────────────────┘ │ - stats (JSON)  │ │ - timestamp        │  │
-│                      └─────────────────┘ └────────────────────┘  │
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐   │
-│  │                    srd_embeddings                         │   │
-│  │                                                           │   │
-│  │ - id                                                      │   │
-│  │ - chunk_text                                              │   │
-│  │ - embedding (vector)                                      │   │
-│  │ - source (spells/monsters/rules/etc)                      │   │
-│  │ - metadata (JSON)                                         │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+  Person(player, "Player", "Creates characters and campaigns, plays text adventures")
+
+  System(dungeon, "AI Dungeon Master", "Web app + API that runs AI-narrated campaigns")
+
+  System_Ext(discord, "Discord", "OAuth identity provider")
+  System_Ext(anthropic, "Anthropic Claude API", "Generates characters, campaigns, DM narration, memory extraction")
+  System_Ext(voyage, "Voyage AI", "Text embeddings (voyage-3.5, 1024 dims)")
+
+  Rel(player, dungeon, "Plays via browser")
+  Rel(player, discord, "Signs in with")
+  Rel(dungeon, discord, "Exchanges OAuth code, fetches user", "HTTPS")
+  Rel(dungeon, anthropic, "Messages API, tool use, structured output", "HTTPS")
+  Rel(dungeon, voyage, "Embeds memories", "HTTPS")
 ```
 
-## Technology Stack
+## Level 2: Containers
 
-### Core Application
+```mermaid
+C4Container
+  title Containers: AI Dungeon Master
 
-| Layer          | Technology     | Purpose                             |
-| -------------- | -------------- | ----------------------------------- |
-| Language       | Python 3.11+   | Primary development language        |
-| Web Framework  | FastAPI        | Async API framework                 |
-| Database       | PostgreSQL 15+ | Application data and vector storage |
-| Vector Storage | pgvector       | Vector similarity search extension  |
-| ORM            | SQLModel       | Database models and queries         |
-| CLI Framework  | Typer or Click | Command-line interface              |
+  Person(player, "Player")
 
-### AI/ML Components
+  System_Boundary(dungeon, "AI Dungeon Master") {
+    Container(web, "dungeon-web", "React, Vite, MUI", "SPA served on localhost:3000. Handles the Discord redirect and calls the API with a JWT")
+    Container(api, "dungeon-service", "Python, FastAPI, SQLModel", "REST API: auth, characters, campaigns, turns. Runs memory extraction as a background task")
+    ContainerDb(db, "PostgreSQL + pgvector", "Postgres 16", "Users, characters, campaigns, checkpoints, message history, vector memory tables")
+    Container(flyway, "Flyway", "Docker", "Applies db/migrations (all envs) and db/seeds (local only)")
+  }
 
-| Component       | Technology                    | Purpose                       |
-| --------------- | ----------------------------- | ----------------------------- |
-| LLM             | Anthropic Claude API          | Dungeon master responses      |
-| Embeddings      | OpenAI text-embedding-3-small | Document and query embeddings |
-| Text Processing | Manual or LangChain splitters | SRD chunking                  |
+  System_Ext(discord, "Discord")
+  System_Ext(anthropic, "Anthropic Claude API")
+  System_Ext(voyage, "Voyage AI")
 
-### Infrastructure
-
-| Component        | Technology     | Purpose                          |
-| ---------------- | -------------- | -------------------------------- |
-| Containerization | Docker         | Application packaging            |
-| Orchestration    | Kubernetes     | Production deployment            |
-| IaC              | Terraform      | Infrastructure provisioning      |
-| Cloud            | AWS EKS        | Managed Kubernetes               |
-| CI/CD            | GitHub Actions | Automated testing and deployment |
-
-### Development Tools
-
-| Tool         | Purpose                |
-| ------------ | ---------------------- |
-| uv or Poetry | Dependency management  |
-| pytest       | Testing                |
-| Ruff         | Linting and formatting |
-| pre-commit   | Git hooks              |
-
-## Data Flow
-
-### 1. Player Message Flow
-
-```
-Player Input
-    │
-    ▼
-FastAPI Endpoint (/campaigns/{id}/message)
-    │
-    ▼
-DM Agent Service
-    │
-    ├──▶ Retrieve relevant SRD context
-    │         │
-    │         ▼
-    │    Query Embedding (OpenAI)
-    │         │
-    │         ▼
-    │    Vector Search (pgvector)
-    │         │
-    │         ▼
-    │    Ranked Context Chunks
-    │
-    ├──▶ Build Prompt
-    │    - System prompt (DM persona)
-    │    - Retrieved SRD context
-    │    - Conversation history
-    │    - Character info
-    │    - Player message
-    │
-    └──▶ LLM Call (Claude)
-              │
-              ▼
-         DM Response
-              │
-              ▼
-         Save to message_history
-              │
-              ▼
-         Return to Player
+  Rel(player, web, "Uses", "HTTPS")
+  Rel(web, discord, "OAuth authorize redirect")
+  Rel(web, api, "JSON/REST, Bearer JWT", "HTTPS")
+  Rel(api, db, "Reads/writes", "psycopg2")
+  Rel(flyway, db, "Migrates", "JDBC")
+  Rel(api, discord, "Token exchange + /users/@me")
+  Rel(api, anthropic, "LLM calls")
+  Rel(api, voyage, "Embeddings")
 ```
 
-### 2. SRD Ingestion Flow (One-time Setup)
+## Level 3: Components (dungeon-service)
 
+```mermaid
+C4Component
+  title Components: dungeon-service API
+
+  Container(web, "dungeon-web", "React SPA")
+  ContainerDb(db, "PostgreSQL + pgvector")
+  System_Ext(discord, "Discord")
+  System_Ext(anthropic, "Anthropic Claude API")
+  System_Ext(voyage, "Voyage AI")
+
+  Container_Boundary(api, "dungeon-service") {
+    Component(authR, "auth router", "src/api/auth.py", "POST /auth/discord/callback")
+    Component(charR, "characters router", "src/api/characters.py", "Character CRUD, preview, classes/races, turns")
+    Component(campR, "campaigns router", "src/api/campaigns.py", "Create/list campaigns, campaign characters")
+    Component(deps, "get_current_user", "src/api/dependencies.py", "Validates JWT, loads User")
+
+    Component(authS, "auth_service", "Python", "Upserts Discord user, signs/validates JWT")
+    Component(charS, "character_service", "Python", "Character preview + persistence, lookups")
+    Component(campS, "campaign_service", "Python", "Parses campaign JSON, links checkpoints")
+    Component(turnS, "turn_service", "Python", "Assembles turn context, persists messages")
+    Component(embS, "embedding_service", "BackgroundTask", "Extracts + embeds + upserts memories")
+
+    Component(dm, "dm_agent", "Anthropic SDK", "All Claude calls: create_character, create_campaign, process_turn, extract_memories")
+    Component(prompts, "prompts", "Python", "System prompts, build_turn_system_prompt")
+    Component(tools, "campaign_tools", "Tool use", "search_checkpoints definition + handler")
+  }
+
+  Rel(web, authR, "OAuth code")
+  Rel(web, charR, "REST + JWT")
+  Rel(web, campR, "REST + JWT")
+  Rel(charR, deps, "Depends")
+  Rel(campR, deps, "Depends")
+
+  Rel(authR, discord, "Token + user fetch")
+  Rel(authR, authS, "Calls")
+  Rel(charR, charS, "Calls")
+  Rel(charR, turnS, "Calls")
+  Rel(charR, embS, "Schedules after turn")
+  Rel(campR, campS, "Calls")
+
+  Rel(charS, dm, "create_character")
+  Rel(campS, dm, "create_campaign")
+  Rel(turnS, dm, "process_turn")
+  Rel(embS, dm, "extract_memories")
+  Rel(dm, prompts, "Uses")
+  Rel(dm, tools, "Executes tool calls")
+  Rel(dm, anthropic, "Messages API")
+  Rel(embS, voyage, "embed")
+
+  Rel(tools, db, "Query checkpoints by tag")
+  Rel(turnS, db, "Load context, save messages")
+  Rel(embS, db, "Upsert memory rows")
+  Rel(authS, db, "Users")
+  Rel(charS, db, "Characters")
+  Rel(campS, db, "Campaigns, checkpoints")
 ```
-SRD Markdown Files
-    │
-    ▼
-Chunking (by section/logical units)
-    │
-    ▼
-Embedding (OpenAI API)
-    │
-    ▼
-Store in srd_embeddings table
+
+## Dynamic: Playing a turn
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Web as dungeon-web
+  participant R as characters router
+  participant T as turn_service
+  participant DM as dm_agent
+  participant C as Claude
+  participant DB as Postgres
+  participant BG as embedding_service (background)
+  participant V as Voyage AI
+
+  Web->>R: POST /characters/{id}/turns {message}
+  R->>R: get_current_user + ownership check
+  R->>T: take_turn()
+  T->>DB: load character, campaign, active checkpoint, last 10 messages
+  T->>DM: process_turn(context)
+  DM->>C: messages.create(system prompt + history + message)
+  C-->>DM: narration
+  T->>DB: insert user + assistant messagehistory
+  R-->>Web: 201 {message}
+  R-)BG: extract_and_store_memories(campaign_id, [player, dm])
+  BG->>C: extract_memories → NPC/location/item/event JSON
+  BG->>V: embed memory texts
+  BG->>DB: upsert memory rows (vector 1024)
 ```
 
-## Key Design Decisions
+Memories are written after every turn, but nothing reads them back into the turn prompt yet.
 
-### Why pgvector over a dedicated vector DB?
+## Dynamic: Creating a campaign
 
-- Single database to manage
-- Simpler infrastructure
-- Good enough performance for this scale (thousands of SRD chunks, not millions)
-- Transactional consistency with application data
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Web as dungeon-web
+  participant S as campaign_service
+  participant DM as dm_agent
+  participant C as Claude
+  participant Tool as search_checkpoints
+  participant DB as Postgres
 
-### Why separate Retrieval and LLM services?
+  Web->>S: POST /campaigns/ {character_id, description}
+  S->>DB: load character, verify owner
+  S->>DM: create_campaign()
+  loop until stop_reason == end_turn
+    DM->>C: messages.create(tools=[search_checkpoints])
+    C-->>DM: tool_use(tags)
+    DM->>Tool: handle_search_checkpoints(tags)
+    Tool->>DB: select checkpoints by tag
+    Tool-->>DM: results → tool_result
+  end
+  C-->>DM: campaign JSON (name, theme, checkpoint_ids, opening_message)
+  S->>DB: insert campaign + campaigncheckpoint rows (first "new", rest "locked")
+  S->>DB: set character.campaign_id, insert opening message into messagehistory
+  S-->>Web: 201 {campaign, opening_message}
+```
 
-- Testable in isolation
-- Can swap LLM providers without touching retrieval logic
-- Clear separation of concerns
+## Data model
 
-### Why CLI first?
-
-- Faster iteration on core AI logic
-- No frontend complexity
-- React frontend added later as a separate concern
-
-## Future Extensions (Not in v1)
-
-- Multiplayer support (WebSocket sessions)
-- Multiple DM personas/styles
-- Campaign branching and world state
-- Image generation for scenes
-- Voice input/output
+```mermaid
+erDiagram
+  user ||--o{ character : owns
+  campaign ||--o{ character : has
+  campaign ||--o{ campaigncheckpoint : "ordered"
+  checkpoint ||--o{ campaigncheckpoint : "used in"
+  campaign ||--o{ messagehistory : logs
+  character ||--o{ messagehistory : sends
+  campaign ||--o{ npcmemory : remembers
+  campaign ||--o{ locationmemory : remembers
+  campaign ||--o{ itemmemory : remembers
+  campaign ||--o{ eventmemory : remembers
+```

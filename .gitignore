@@ -17,3 +17,8 @@ wheels/
 
 # Git worktrees
 .worktrees/
+
+# Local Claude working files (plans/specs are not committed)
+docs/plans/
+docs/superpowers/
+.claude/settings.local.json

@@ -1,7 +1,6 @@
 from typing import Optional
 
-from httpx._transports import default
-from sqlmodel import Field, Relationship, SQLModel, table
+from sqlmodel import Field, Relationship, SQLModel
 
 
 class CharacterBase(SQLModel):

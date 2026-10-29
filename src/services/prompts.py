@@ -140,38 +140,38 @@ When extracting names, prioritize the DM's response as the canonical source. If 
 Use one of: "decision", "revelation", "deal", "consequence"
 
 ## Example Output
-{
+{{
     "npcs": [
-      {
+      {{
         "name": "Mira the Innkeeper",
         "role": "quest-giver",
         "disposition": "friendly",
         "known_facts": "Runs the Rusty Flagon inn in Millhaven. Lost her son to the cultists three months ago. Offered the party free lodging in exchange for investigating the old mill.",
         "secrets": "She's been quietly passing information to the thieves guild about traveler movements."
-      }
+      }}
     ],
     "locations": [
-      {
+      {{
         "name": "The Rusty Flagon",
         "description": "A weathered two-story inn on the eastern edge of Millhaven. Smells of pipe smoke and stew.",
         "events": "Party received quest from Mira here. Overheard cultist conversation at the corner table."
-      }
+      }}
     ],
     "items": [
-      {
+      {{
         "name": "Sealed Letter",
         "description": "A wax-sealed letter bearing an unfamiliar sigil — a serpent eating its own tail.",
         "where_found": "Dropped by fleeing cultist outside the Rusty Flagon",
         "status": "held"
-      }
+      }}
     ],
     "events": [
-      {
+      {{
         "summary": "Party accepted Mira's quest to investigate the old mill in exchange for lodging and 50 gold.",
         "category": "deal"
-      }
+      }}
     ]
-}
+}}
 
 ## Exchange
 Player: {player_message}

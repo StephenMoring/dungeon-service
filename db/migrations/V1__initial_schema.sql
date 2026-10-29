@@ -64,7 +64,7 @@ CREATE TABLE race (
   description TEXT NOT NULL
 );
 
-CREATE TABLE npc_memory (
+CREATE TABLE npcmemory (
     id              SERIAL PRIMARY KEY,
     campaign_id     INTEGER NOT NULL REFERENCES campaign(id),
     name            TEXT NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE npc_memory (
     updated_at      TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE location_memory (
+CREATE TABLE locationmemory (
     id              SERIAL PRIMARY KEY,
     campaign_id     INTEGER NOT NULL REFERENCES campaign(id),
     name            TEXT NOT NULL,
@@ -88,7 +88,7 @@ CREATE TABLE location_memory (
     updated_at      TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE item_memory (
+CREATE TABLE itemmemory (
     id              SERIAL PRIMARY KEY,
     campaign_id     INTEGER NOT NULL REFERENCES campaign(id),
     name            TEXT NOT NULL,
@@ -100,7 +100,7 @@ CREATE TABLE item_memory (
     updated_at      TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE event_memory (
+CREATE TABLE eventmemory (
     id              SERIAL PRIMARY KEY,
     campaign_id     INTEGER NOT NULL REFERENCES campaign(id),
     summary         TEXT NOT NULL,         -- plain language description of what happened
@@ -111,17 +111,17 @@ CREATE TABLE event_memory (
 );
 
 -- B-tree indexes on campaign_id for filtering rows before/after vector search
-CREATE INDEX ON npc_memory (campaign_id);
-CREATE INDEX ON location_memory (campaign_id);
-CREATE INDEX ON item_memory (campaign_id);
-CREATE INDEX ON event_memory (campaign_id);
+CREATE INDEX ON npcmemory (campaign_id);
+CREATE INDEX ON locationmemory (campaign_id);
+CREATE INDEX ON itemmemory (campaign_id);
+CREATE INDEX ON eventmemory (campaign_id);
 
 -- HNSW indexes for approximate nearest neighbor search
 -- HNSW (Hierarchical Navigable Small World) builds a graph structure at index time
 -- that allows very fast approximate similarity search at query time.
 -- It trades a small amount of recall accuracy for a large speed gain.
 -- For a game, "close enough" is fine — you don't need perfect recall.
-CREATE INDEX ON npc_memory      USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX ON location_memory USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX ON item_memory     USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX ON event_memory    USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX ON npcmemory      USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX ON locationmemory USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX ON itemmemory     USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX ON eventmemory    USING hnsw (embedding vector_cosine_ops);
