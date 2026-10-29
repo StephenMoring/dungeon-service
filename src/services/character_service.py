@@ -49,7 +49,9 @@ def get_all_races(session: Session) -> Sequence[Race]:
     return session.exec(select(Race)).all()
 
 
-def get_character_turns(character_id: int, session: Session) -> Sequence[MessageHistory]:
+def get_character_turns(
+    character_id: int, session: Session
+) -> Sequence[MessageHistory]:
     return session.exec(
         select(MessageHistory)
         .where(MessageHistory.character_id == character_id)

@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import AsyncGenerator
 from dataclasses import asdict
 
@@ -11,6 +12,8 @@ from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta, process_turn_stream
 from src.services.embedding_service import extract_and_store_memories
 from src.tools.dice_tools import RollResult
+
+logger = logging.getLogger(__name__)
 
 
 def load_turn_context(character_id: int, message: str, session: Session) -> dict:
@@ -105,8 +108,13 @@ async def stream_turn(
 
         dm_message = "".join(text_parts)
         message_id = save_turn(campaign_id, character_id, player_message, dm_message)
-    except Exception as e:
+    except ValueError as e:
         yield sse("error", {"detail": str(e)})
+        return
+    except Exception:
+        # Don't leak API or database internals to the player.
+        logger.exception("Turn stream failed", extra={"campaign_id": campaign_id})
+        yield sse("error", {"detail": "The Dungeon Master lost the thread. Try again."})
         return
 
     background_tasks.add_task(

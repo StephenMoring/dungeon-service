@@ -201,6 +201,19 @@ class TestStreamTurn:
         save.assert_not_called()
         tasks.add_task.assert_not_called()
 
+    @patch("src.services.turn_service.save_turn")
+    async def test_unexpected_error_hides_internals(self, save):
+        with patch(
+            "src.services.turn_service.process_turn_stream",
+            fake_dm(error=RuntimeError("SELECT password FROM user")),
+        ):
+            events = await run_stream()
+
+        name, data = events[-1]
+        assert name == "error"
+        assert "SELECT" not in data["detail"]
+        assert data["detail"] == "The Dungeon Master lost the thread. Try again."
+
 
 class TestSaveTurn:
     @patch("src.services.turn_service.Session")

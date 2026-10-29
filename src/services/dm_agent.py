@@ -238,9 +238,12 @@ async def process_turn_stream(
         system=system_prompt,
         messages=messages,
         tools=[roll_check_tool],
+        tool_choice={"type": "auto", "disable_parallel_tool_use": True},
     ) as stream:
+        wrote_setup = False
         async for event in stream:
             if event.type == "text":
+                wrote_setup = True
                 yield TextDelta(event.text)
         final = await stream.get_final_message()
 
@@ -256,6 +259,9 @@ async def process_turn_stream(
         character, tool_input["stat"], tool_input["difficulty"], tool_input["reason"]
     )
     yield roll
+    if wrote_setup:
+        # Setup text rarely ends with whitespace; keep it apart from the outcome.
+        yield TextDelta("\n\n")
 
     messages.append({"role": "assistant", "content": final.content})
     messages.append(

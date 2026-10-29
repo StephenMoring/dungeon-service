@@ -192,7 +192,12 @@ class TestProcessTurnStream:
 
         events = await collect(process_turn_stream(make_turn()))
 
-        assert events == [TextDelta("You creep forward. "), ROLL, TextDelta("Caught.")]
+        assert events == [
+            TextDelta("You creep forward. "),
+            ROLL,
+            TextDelta("\n\n"),
+            TextDelta("Caught."),
+        ]
 
     async def test_unknown_tool_raises(self, mocker):
         mocker.patch(
@@ -202,3 +207,38 @@ class TestProcessTurnStream:
 
         with pytest.raises(ValueError):
             await collect(process_turn_stream(make_turn()))
+
+    async def test_first_request_disables_parallel_tool_use(self, mocker):
+        stream = mocker.patch(
+            "src.services.dm_agent.async_client.messages.stream",
+            side_effect=[FakeStream(["Hi"], text_response("Hi"))],
+        )
+
+        await collect(process_turn_stream(make_turn()))
+
+        assert stream.call_args.kwargs["tool_choice"] == {
+            "type": "auto",
+            "disable_parallel_tool_use": True,
+        }
+
+    async def test_paragraph_break_between_setup_and_outcome(self, mocker):
+        mocker.patch(
+            "src.services.dm_agent.async_client.messages.stream",
+            side_effect=[
+                FakeStream(
+                    ["You edge toward the gate."],
+                    tool_use_response("roll_check", ROLL_INPUT),
+                ),
+                FakeStream(["The guard turns."], text_response("The guard turns.")),
+            ],
+        )
+        mocker.patch("src.services.dm_agent.handle_roll_check", return_value=ROLL)
+
+        events = await collect(process_turn_stream(make_turn()))
+
+        assert events == [
+            TextDelta("You edge toward the gate."),
+            ROLL,
+            TextDelta("\n\n"),
+            TextDelta("The guard turns."),
+        ]
