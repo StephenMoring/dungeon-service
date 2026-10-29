@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +10,18 @@ from src.db.db import get_session
 from src.main import app
 from src.models.character import Character
 from src.models.user import User
+
+
+@pytest.fixture(autouse=True)
+def no_memory_lookup():
+    """Keep tests off Voyage: turn context loads with no memories unless a test patches it."""
+    from src.services.memory_service import RetrievedMemories
+
+    with patch(
+        "src.services.turn_service.retrieve_memories",
+        return_value=RetrievedMemories(),
+    ):
+        yield
 
 
 @pytest.fixture

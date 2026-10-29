@@ -225,7 +225,9 @@ async def process_turn_stream(
     recent_messages = turn["recent_messages"]
     player_message = turn["message"]
 
-    system_prompt = build_turn_system_prompt(campaign, character, checkpoint)
+    system_prompt = build_turn_system_prompt(
+        campaign, character, checkpoint, turn.get("memories")
+    )
 
     messages: list[MessageParam] = [
         {"role": msg.role, "content": msg.content} for msg in recent_messages

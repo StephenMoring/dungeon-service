@@ -38,6 +38,7 @@ uv run mypy src
 - `dm_agent.py` - Anthropic clients and all LLM calls: `create_character()` (structured output via `output_config`), `create_campaign()` (tool_use loop), `process_turn_stream()` (async; yields `TextDelta` and at most one `RollResult` via the `roll_check` tool, second request uses `tool_choice: none`), `extract_memories()`
 - `prompts.py` - Prompt strings and `build_turn_system_prompt()` (campaign + character + checkpoint context)
 - `turn_service.py` - `load_turn_context()` loads character → campaign → active checkpoint → last 10 messages; `stream_turn()` turns `process_turn_stream` output into SSE events (`thinking`, `roll`, `text`, `done`, `error`), then `save_turn()` persists both messages with its own `Session(engine)` and schedules memory extraction. Nothing is saved on error
+- `memory_service.py` - `retrieve_memories(campaign_id, query_text, session)`: embeds the query (`embed_query`, Voyage `input_type="query"`) and runs a pgvector cosine search (`<=>`) per memory table, scoped to the campaign, capped at `MEMORIES_PER_KIND` (3) and `MAX_COSINE_DISTANCE` (0.6). `turn_service.load_turn_context()` calls it with the last DM reply + player message; failures are logged and the turn continues with no memories. `prompts.format_memories()` renders the "What You Remember" section
 - `embedding_service.py` - `extract_and_store_memories()` runs as a FastAPI BackgroundTask after each turn: extracts NPC/location/item/event memories, embeds with Voyage `voyage-3.5` (1024 dims), upserts by name per campaign
 - `campaign_service.py` - Verifies the requesting user owns `character_id`, calls `create_campaign`, persists the campaign + ordered checkpoints (first `new`, rest `locked`), assigns the character to it, and saves the opening message as the first assistant `messagehistory` row
 - `character_service.py` - `create_preview()` generates a sheet via dm_agent without saving; `create()` saves a client-submitted character for the current user
@@ -59,6 +60,7 @@ uv run mypy src
 - Patch service functions where the router imports them (e.g. `src.api.characters.load_turn_context`)
 - Always patch `src.services.turn_service.extract_and_store_memories` in turn route tests. TestClient runs background tasks, so an unpatched turn test calls Claude and Voyage for real
 - Async tests use `@pytest.mark.anyio` (anyio's pytest plugin ships with FastAPI). `tests/helpers.py:FakeStream` stands in for `async_client.messages.stream`
+- `conftest.py` has an autouse `no_memory_lookup` fixture that stubs `src.services.turn_service.retrieve_memories` (empty), so tests never call Voyage. Patch it again in a test to exercise retrieval
 - `src/config` raises at import if env vars are missing, so `.env` must exist to run tests
 
 ## Tech Stack

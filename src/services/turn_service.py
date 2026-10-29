@@ -11,6 +11,7 @@ from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta, process_turn_stream
 from src.services.embedding_service import extract_and_store_memories
+from src.services.memory_service import RetrievedMemories, retrieve_memories
 from src.tools.dice_tools import RollResult
 
 logger = logging.getLogger(__name__)
@@ -51,13 +52,36 @@ def load_turn_context(character_id: int, message: str, session: Session) -> dict
     )
     recent_messages = list(reversed(session.exec(recent_messages_statement).all()))
 
+    assert campaign.id is not None
+    memories = _recall(campaign.id, recent_messages, message, session)
+
     return {
         "character": character,
         "campaign": campaign,
         "current_checkpoint": current_checkpoint_detail,
         "recent_messages": recent_messages,
         "message": message,
+        "memories": memories,
     }
+
+
+def _recall(
+    campaign_id: int,
+    recent_messages: list[MessageHistory],
+    message: str,
+    session: Session,
+) -> RetrievedMemories:
+    """Find campaign memories related to this moment. Never fails the turn."""
+    # The player often says "her" or "it"; the DM's last reply usually names who/what.
+    last_dm = next(
+        (m.content for m in reversed(recent_messages) if m.role == "assistant"), None
+    )
+    query = f"{last_dm}\n\n{message}" if last_dm else message
+    try:
+        return retrieve_memories(campaign_id, query, session)
+    except Exception:
+        logger.exception("Memory lookup failed", extra={"campaign_id": campaign_id})
+        return RetrievedMemories()
 
 
 def save_turn(

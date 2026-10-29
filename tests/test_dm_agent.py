@@ -3,12 +3,14 @@ import json
 import pytest
 
 from src.models.campaign import Campaign
+from src.models.memory import EventMemory
 from src.services.dm_agent import (
     TextDelta,
     create_campaign,
     create_character,
     process_turn_stream,
 )
+from src.services.memory_service import RetrievedMemories
 from src.tools.dice_tools import RollResult, roll_check_tool
 from tests.conftest import make_character
 from tests.helpers import (
@@ -242,3 +244,19 @@ class TestProcessTurnStream:
             TextDelta("\n\n"),
             TextDelta("The guard turns."),
         ]
+
+    async def test_memories_reach_the_system_prompt(self, mocker):
+        stream = mocker.patch(
+            "src.services.dm_agent.async_client.messages.stream",
+            side_effect=[FakeStream(["Hi"], text_response("Hi"))],
+        )
+        turn = make_turn()
+        turn["memories"] = RetrievedMemories(
+            events=[EventMemory(campaign_id=1, summary="Found the guild ledger")]
+        )
+
+        await collect(process_turn_stream(turn))
+
+        system = stream.call_args.kwargs["system"]
+        assert "What You Remember" in system
+        assert "Found the guild ledger" in system

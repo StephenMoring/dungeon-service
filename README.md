@@ -9,9 +9,9 @@ The frontend is the sibling repo `../dungeon-web`. Its Vite dev server (`http://
 - **Discord sign-in**: The frontend sends the OAuth code to `/auth/discord/callback`. The service exchanges it with Discord, creates or updates the user, and returns a 30-day JWT. Every other route (except `/health`) requires that JWT.
 - **Characters**: The player gives a name, class, race and free-text description. Claude returns a character sheet with age, biography and 7 stats on a 1–10 scale (strength, perception, endurance, charisma, intelligence, agility, luck), using structured output. The player previews it, then saves it.
 - **Campaigns**: The player picks a character and describes the campaign they want. Claude classifies the request into tags, calls the `search_checkpoints` tool to pull matching pre-authored scenarios, and returns a campaign with an ordered list of checkpoints and an opening message. The first checkpoint is active and the rest are locked. The character joins the campaign, and the opening message starts its history.
-- **Streaming turns**: Each player message goes to Claude with the campaign, character sheet, active checkpoint and the last 10 messages. The reply streams back as Server-Sent Events (`thinking`, `roll`, `text`, `done`, `error`). Both sides of the exchange are saved when the stream finishes; nothing is saved if it fails.
+- **Streaming turns**: Each player message goes to Claude with the campaign, character sheet, active checkpoint, relevant campaign memories and the last 10 messages. The reply streams back as Server-Sent Events (`thinking`, `roll`, `text`, `done`, `error`). Both sides of the exchange are saved when the stream finishes; nothing is saved if it fails.
 - **Dice checks**: When an action's outcome is uncertain and failure would matter (sneaking, persuading, spotting something hidden), Claude calls the `roll_check` tool with a stat, a difficulty and a reason. The server rolls a d20 and adds the stat, and the action passes if the total meets the target: easy 10, medium 15, hard 20 (ties pass). The result streams to the browser as a `roll` event, which the frontend animates before revealing the narration. Claude must narrate failures as failures. At most one roll per turn, and rolls are not stored.
-- **Campaign memory**: After each turn, a background task asks Claude to extract NPCs, locations, items and events from the exchange, embeds them with Voyage AI (`voyage-3.5`, 1024 dimensions), and upserts them into pgvector tables per campaign. The DM doesn't read these memories back yet.
+- **Campaign memory (RAG)**: After each turn, a background task asks Claude to extract NPCs, locations, items and events from the exchange, embeds them with Voyage AI (`voyage-3.5`, 1024 dimensions), and upserts them into pgvector tables per campaign. Before each turn, the DM's last reply plus the player's message are embedded as a search query, and a cosine-similarity search pulls up to 3 close matches of each kind from that campaign (cutoff: cosine distance 0.6). The matches go into the DM's prompt as "What You Remember", including secrets the player has uncovered, so the DM stays consistent with what the player knows and characters' lies can be caught. If the lookup fails, the turn continues without memories.
 - **Per-user data**: All users share one database, and every route that returns player data filters by the signed-in user. Characters carry a `user_id`; campaigns belong to whoever owns their character. Checkpoints, classes and races are shared content.
 
 ## Stack
@@ -31,7 +31,7 @@ C4 diagrams (system context, containers, components), sequence diagrams for a tu
 ```
 src/
   api/          FastAPI routers: auth, characters, campaigns; get_current_user dependency
-  services/     dm_agent (all Claude calls), prompts, turn/campaign/character/auth/embedding services
+  services/     dm_agent (all Claude calls), prompts, memory retrieval, turn/campaign/character/auth/embedding services
   tools/        Claude tools: search_checkpoints (campaign creation), roll_check (dice)
   models/       SQLModel tables and request/response schemas
   db/           engine + session dependency
@@ -112,7 +112,7 @@ uv run mypy src
 
 ## Roadmap
 
-- Read campaign memories back into the turn prompt (vector search over the memory tables)
+- Tune memory retrieval (per-kind limit, distance cutoff) from real play
 - Checkpoint progression: detect when an objective is done, summarize it, move to the next checkpoint
 - Tune how often the DM calls for rolls, based on real play
 

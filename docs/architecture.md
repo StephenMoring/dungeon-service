@@ -12,13 +12,13 @@ flowchart TB
   dungeon["<b>AI Dungeon Master</b><br/><i>[Software System]</i><br/>Web app + API that runs AI-narrated<br/>campaigns with server-side dice checks"]
   discord["<b>Discord</b><br/><i>[External System]</i><br/>OAuth identity provider"]
   anthropic["<b>Anthropic Claude API</b><br/><i>[External System]</i><br/>Characters, campaigns, DM narration,<br/>roll_check tool, memory extraction"]
-  voyage["<b>Voyage AI</b><br/><i>[External System]</i><br/>Text embeddings (voyage-3.5)"]
+  voyage["<b>Voyage AI</b><br/><i>[External System]</i><br/>Text embeddings (voyage-3.5)<br/>for memory storage + search"]
 
   player -- "Plays in browser<br/>[HTTPS]" --> dungeon
   player -. "Signs in" .-> discord
   dungeon -- "OAuth token + profile<br/>[HTTPS]" --> discord
   dungeon -- "Streaming messages + tools<br/>[HTTPS]" --> anthropic
-  dungeon -- "Embeds memories<br/>[HTTPS]" --> voyage
+  dungeon -- "Embeds + searches memories<br/>[HTTPS]" --> voyage
 
   classDef person fill:#08427b,stroke:#052e56,color:#fff
   classDef system fill:#1168bd,stroke:#0b4884,color:#fff
@@ -92,6 +92,7 @@ flowchart LR
       embS["<b>embedding_service</b><br/>Background: extract,<br/>embed, upsert memories"]
       campS["<b>campaign_service</b><br/>Campaign + checkpoints"]
     end
+    memS["<b>memory_service</b><br/>Vector search over<br/>campaign memories"]
     dm["<b>dm_agent</b><br/>All Claude calls,<br/>prompts.py system prompts"]
     tools["<b>tools</b><br/>search_checkpoints,<br/>roll_check (d20 + stat)"]
   end
@@ -112,6 +113,9 @@ flowchart LR
   campR --> campS
   charS -- "create_character" --> dm
   turnS -- "process_turn_stream" --> dm
+  turnS -- "retrieve_memories" --> memS
+  memS -- "embed query" --> voyage
+  memS -- "cosine search" --> db
   embS -- "extract_memories" --> dm
   campS -- "create_campaign" --> dm
   embS -- "embed" --> voyage
@@ -124,7 +128,7 @@ flowchart LR
   classDef component fill:#85bbf0,stroke:#5d82a8,color:#0b2340
   classDef external fill:#6b6b6b,stroke:#4d4d4d,color:#fff
   class web,db container
-  class authR,charR,campR,authS,charS,campS,turnS,embS,dm,tools component
+  class authR,charR,campR,authS,charS,campS,turnS,memS,embS,dm,tools component
   class discord,anthropic,voyage external
   style svc fill:none,stroke:#438dd5,stroke-width:2px,stroke-dasharray:6 4
   style services fill:#eef5fc,stroke:#85bbf0
@@ -144,11 +148,14 @@ sequenceDiagram
   participant Dice as roll_check
   participant DB as Postgres
   participant BG as embedding_service (background)
+  participant V as Voyage AI
 
   Web->>R: POST /characters/{id}/turns/stream {message}
   R->>R: get_current_user + ownership check
   R->>T: load_turn_context()
   T->>DB: character, campaign, active checkpoint, last 10 messages
+  T->>V: embed last DM reply + message (query)
+  T->>DB: cosine search memory tables (this campaign, top 3 per kind)
   R-->>Web: SSE stream opens
   T-->>Web: event: thinking
   T->>DM: process_turn_stream(turn)
@@ -166,7 +173,7 @@ sequenceDiagram
   R-)BG: extract_and_store_memories(campaign_id, [player, dm])
 ```
 
-Rolls are never stored. Memories are written after every turn, but nothing reads them back into the turn prompt yet.
+Rolls are never stored. Memories are written after every turn and searched before the next one; the matches go into the DM's system prompt. If the memory lookup fails, the turn continues without them.
 
 ## Dynamic: Creating a campaign
 

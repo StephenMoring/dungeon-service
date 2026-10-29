@@ -8,6 +8,7 @@ from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.character import Character
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta
+from src.services.memory_service import RetrievedMemories
 from src.services.turn_service import (
     load_turn_context,
     save_turn,
@@ -86,6 +87,56 @@ class TestLoadTurnContext:
     def test_raises_when_context_missing(self, overrides, error):
         with pytest.raises(ValueError, match=error):
             load_turn_context(1, "hi", default_session(**overrides))
+
+
+@patch("src.services.turn_service.retrieve_memories")
+class TestTurnMemories:
+    def test_searches_with_last_dm_reply_and_player_message(self, retrieve):
+        newest_first = [
+            MessageHistory(
+                id=2,
+                campaign_id=1,
+                character_id=1,
+                role="assistant",
+                content="Mira wipes the bar and smiles.",
+            ),
+            MessageHistory(
+                id=1,
+                campaign_id=1,
+                character_id=1,
+                role="user",
+                content="I enter",
+            ),
+        ]
+        session = default_session(history=newest_first)
+
+        load_turn_context(1, "I confront her", session)
+
+        retrieve.assert_called_once_with(
+            1, "Mira wipes the bar and smiles.\n\nI confront her", session
+        )
+
+    def test_searches_with_message_alone_when_no_history(self, retrieve):
+        session = default_session()
+
+        load_turn_context(1, "I look around", session)
+
+        assert retrieve.call_args.args[1] == "I look around"
+
+    def test_adds_memories_to_turn(self, retrieve):
+        memories = RetrievedMemories()
+        retrieve.return_value = memories
+
+        turn = load_turn_context(1, "hi", default_session())
+
+        assert turn["memories"] is memories
+
+    def test_lookup_failure_does_not_break_the_turn(self, retrieve):
+        retrieve.side_effect = RuntimeError("voyage down")
+
+        turn = load_turn_context(1, "hi", default_session())
+
+        assert turn["memories"].is_empty()
 
 
 ROLL = RollResult(

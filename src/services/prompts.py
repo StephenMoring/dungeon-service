@@ -1,3 +1,8 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.services.memory_service import RetrievedMemories
+
 master_system_prompt = """You are an AI Dungeon Master for a narrative focused RPG. You bring stories to life with vivid descriptions, memorable npcs, and player-driven adventures.
 
 ## Your Role 
@@ -68,7 +73,55 @@ Use these tags when calling search_checkpoints:
 """
 
 
-def build_turn_system_prompt(campaign, character, checkpoint) -> str:
+def _line(label: str, value: str | None) -> str:
+    return f" {label}: {value}." if value else ""
+
+
+def format_memories(memories: "RetrievedMemories") -> str:
+    """Render retrieved campaign memories as a prompt section; empty when there are none."""
+    if memories.is_empty():
+        return ""
+
+    sections = []
+    if memories.npcs:
+        lines = [
+            f"- **{n.name}**{_line('Role', n.role)}{_line('Disposition', n.disposition)}"
+            f"{_line('Known facts', n.known_facts)}{_line('Secrets the player has uncovered', n.secrets)}"
+            for n in memories.npcs
+        ]
+        sections.append("### Characters\n" + "\n".join(lines))
+    if memories.locations:
+        lines = [
+            f"- **{loc.name}**{_line('Description', loc.description)}{_line('What happened here', loc.events)}"
+            for loc in memories.locations
+        ]
+        sections.append("### Locations\n" + "\n".join(lines))
+    if memories.items:
+        lines = [
+            f"- **{i.name}**{_line('Description', i.description)}{_line('Found', i.where_found)}{_line('Status', i.status)}"
+            for i in memories.items
+        ]
+        sections.append("### Items\n" + "\n".join(lines))
+    if memories.events:
+        lines = [
+            f"- {e.summary}" + (f" ({e.category})" if e.category else "")
+            for e in memories.events
+        ]
+        sections.append("### Events\n" + "\n".join(lines))
+
+    return (
+        "## What You Remember\n"
+        "Facts from earlier in this campaign that the player has already seen or learned. "
+        "Stay consistent with them. Characters keep their secrets and may lie, but the player "
+        "knows what is listed here, so their lies can be caught.\n\n"
+        + "\n\n".join(sections)
+        + "\n"
+    )
+
+
+def build_turn_system_prompt(
+    campaign, character, checkpoint, memories: "RetrievedMemories | None" = None
+) -> str:
     checkpoint_section = ""
     if checkpoint:
         checkpoint_section = f"""
@@ -93,7 +146,8 @@ def build_turn_system_prompt(campaign, character, checkpoint) -> str:
 {character.biography}
 
 **Stats**: STR {character.strength} | PER {character.perception} | END {character.endurance} | CHA {character.charisma} | INT {character.intelligence} | AGI {character.agility} | LCK {character.luck}
-{checkpoint_section}"""
+{checkpoint_section}
+{format_memories(memories) if memories else ""}"""
 
 
 character_creation_prompt = """You are a character creation assistant for a narrative RPG. Given a name, a character description, a class, a race, generate a complete character sheet as a JSON object.

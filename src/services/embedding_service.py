@@ -16,6 +16,13 @@ def embed(texts: list[str]) -> list[list[float]]:
     return cast(list[list[float]], result.embeddings)
 
 
+def embed_query(text: str) -> list[float]:
+    """Embed search text. Voyage tunes `query` embeddings to match stored `document` ones."""
+    vo = voyageai.Client()  # type: ignore
+    result = vo.embed([text], model="voyage-3.5", input_type="query")
+    return cast(list[float], result.embeddings[0])
+
+
 def extract_and_store_memories(campaign_id: int, messages: list):
     with Session(engine) as session:
         memories = extract_memories(messages[0], messages[1])
