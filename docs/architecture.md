@@ -1,114 +1,134 @@
 # Architecture
 
-C4 diagrams for the dungeon service. They're written in Mermaid and render on GitHub. Update them when containers, external systems, or service boundaries change.
+C4 diagrams for the dungeon service, written in Mermaid so they render on GitHub. Update them when containers, external systems, or service boundaries change.
+
+The three C4 levels use Mermaid `flowchart` with C4 colours rather than Mermaid's `C4Context` diagrams. The C4 renderer doesn't route lines around boxes, so its labels overlap and lines cross through shapes. Legend: dark blue = person, blue = our system / containers, light blue = components, grey = external systems. Dashed lines are browser redirects or background work.
 
 ## Level 1: System Context
 
 ```mermaid
-C4Context
-  title System Context: AI Dungeon Master
+flowchart TB
+  player["<b>Player</b><br/><i>[Person]</i><br/>Creates characters and campaigns,<br/>plays text adventures"]
+  dungeon["<b>AI Dungeon Master</b><br/><i>[Software System]</i><br/>Web app + API that runs AI-narrated<br/>campaigns with server-side dice checks"]
+  discord["<b>Discord</b><br/><i>[External System]</i><br/>OAuth identity provider"]
+  anthropic["<b>Anthropic Claude API</b><br/><i>[External System]</i><br/>Characters, campaigns, DM narration,<br/>roll_check tool, memory extraction"]
+  voyage["<b>Voyage AI</b><br/><i>[External System]</i><br/>Text embeddings (voyage-3.5)"]
 
-  Person(player, "Player", "Creates characters and campaigns, plays text adventures")
+  player -- "Plays in browser<br/>[HTTPS]" --> dungeon
+  player -. "Signs in" .-> discord
+  dungeon -- "OAuth token + profile<br/>[HTTPS]" --> discord
+  dungeon -- "Streaming messages + tools<br/>[HTTPS]" --> anthropic
+  dungeon -- "Embeds memories<br/>[HTTPS]" --> voyage
 
-  System(dungeon, "AI Dungeon Master", "Web app + API that runs AI-narrated campaigns")
-
-  System_Ext(discord, "Discord", "OAuth identity provider")
-  System_Ext(anthropic, "Anthropic Claude API", "Generates characters, campaigns, DM narration, memory extraction")
-  System_Ext(voyage, "Voyage AI", "Text embeddings (voyage-3.5, 1024 dims)")
-
-  Rel(player, dungeon, "Plays via browser")
-  Rel(player, discord, "Signs in with")
-  Rel(dungeon, discord, "Exchanges OAuth code, fetches user", "HTTPS")
-  Rel(dungeon, anthropic, "Messages API, tool use, structured output", "HTTPS")
-  Rel(dungeon, voyage, "Embeds memories", "HTTPS")
+  classDef person fill:#08427b,stroke:#052e56,color:#fff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#fff
+  classDef container fill:#438dd5,stroke:#2e6295,color:#fff
+  classDef component fill:#85bbf0,stroke:#5d82a8,color:#0b2340
+  classDef external fill:#6b6b6b,stroke:#4d4d4d,color:#fff
+  linkStyle default stroke:#707070,stroke-width:2.5px
+  class player person
+  class dungeon system
+  class discord,anthropic,voyage external
 ```
 
 ## Level 2: Containers
 
 ```mermaid
-C4Container
-  title Containers: AI Dungeon Master
+flowchart TB
+  player["<b>Player</b><br/><i>[Person]</i>"]
 
-  Person(player, "Player")
+  subgraph sys["AI Dungeon Master [Software System]"]
+    direction TB
+    web["<b>dungeon-web</b><br/><i>[Container: React, Vite, Tailwind]</i><br/>SPA. Handles the Discord redirect,<br/>streams turns, animates dice"]
+    api["<b>dungeon-service</b><br/><i>[Container: Python, FastAPI, SQLModel]</i><br/>REST + SSE API: auth, characters,<br/>campaigns, turns, dice checks"]
+    db[("<b>PostgreSQL + pgvector</b><br/><i>[Container: Postgres 16]</i><br/>Users, characters, campaigns,<br/>checkpoints, history, memories")]
+    flyway["<b>Flyway</b><br/><i>[Container: Docker]</i><br/>Migrations everywhere,<br/>seeds locally"]
+  end
 
-  System_Boundary(dungeon, "AI Dungeon Master") {
-    Container(web, "dungeon-web", "React, Vite, MUI", "SPA served on localhost:3000. Handles the Discord redirect and calls the API with a JWT")
-    Container(api, "dungeon-service", "Python, FastAPI, SQLModel", "REST API: auth, characters, campaigns, turns. Runs memory extraction as a background task")
-    ContainerDb(db, "PostgreSQL + pgvector", "Postgres 16", "Users, characters, campaigns, checkpoints, message history, vector memory tables")
-    Container(flyway, "Flyway", "Docker", "Applies db/migrations (all envs) and db/seeds (local only)")
-  }
+  discord["<b>Discord</b><br/><i>[External System]</i>"]
+  anthropic["<b>Anthropic Claude API</b><br/><i>[External System]</i>"]
+  voyage["<b>Voyage AI</b><br/><i>[External System]</i>"]
 
-  System_Ext(discord, "Discord")
-  System_Ext(anthropic, "Anthropic Claude API")
-  System_Ext(voyage, "Voyage AI")
+  player -- "Uses<br/>[HTTPS]" --> web
+  web -. "OAuth authorize redirect" .-> discord
+  web -- "JSON + SSE, Bearer JWT<br/>[HTTPS]" --> api
+  api -- "Reads/writes<br/>[psycopg2]" --> db
+  flyway -- "Migrates<br/>[JDBC]" --> db
+  api -- "Token exchange + /users/@me" --> discord
+  api -- "Streaming LLM calls + tools" --> anthropic
+  api -- "Embeddings" --> voyage
 
-  Rel(player, web, "Uses", "HTTPS")
-  Rel(web, discord, "OAuth authorize redirect")
-  Rel(web, api, "JSON/REST, Bearer JWT", "HTTPS")
-  Rel(api, db, "Reads/writes", "psycopg2")
-  Rel(flyway, db, "Migrates", "JDBC")
-  Rel(api, discord, "Token exchange + /users/@me")
-  Rel(api, anthropic, "LLM calls")
-  Rel(api, voyage, "Embeddings")
+  classDef person fill:#08427b,stroke:#052e56,color:#fff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#fff
+  classDef container fill:#438dd5,stroke:#2e6295,color:#fff
+  classDef component fill:#85bbf0,stroke:#5d82a8,color:#0b2340
+  classDef external fill:#6b6b6b,stroke:#4d4d4d,color:#fff
+  linkStyle default stroke:#707070,stroke-width:2.5px
+  class player person
+  class web,api,flyway container
+  class db container
+  class discord,anthropic,voyage external
+  style sys fill:none,stroke:#1168bd,stroke-width:2px,stroke-dasharray:6 4
 ```
 
 ## Level 3: Components (dungeon-service)
 
+The services all read and write Postgres through SQLModel, shown as a single edge from the Services group.
+
 ```mermaid
-C4Component
-  title Components: dungeon-service API
+flowchart LR
+  web["<b>dungeon-web</b><br/><i>[Container: React SPA]</i>"]
 
-  Container(web, "dungeon-web", "React SPA")
-  ContainerDb(db, "PostgreSQL + pgvector")
-  System_Ext(discord, "Discord")
-  System_Ext(anthropic, "Anthropic Claude API")
-  System_Ext(voyage, "Voyage AI")
+  subgraph svc["dungeon-service [Container]"]
+    direction LR
+    authR["<b>auth router</b><br/>POST /auth/discord/callback"]
+    charR["<b>characters router</b><br/>CRUD, preview, lookups,<br/>turn stream (SSE)<br/><i>JWT via get_current_user</i>"]
+    campR["<b>campaigns router</b><br/>Create + list, scoped<br/>to the current user<br/><i>JWT via get_current_user</i>"]
+    subgraph services["Services · src/services"]
+      direction TB
+      authS["<b>auth_service</b><br/>Discord user upsert, JWT"]
+      charS["<b>character_service</b><br/>Preview + persistence"]
+      turnS["<b>turn_service</b><br/>Context, SSE events,<br/>saves messages"]
+      embS["<b>embedding_service</b><br/>Background: extract,<br/>embed, upsert memories"]
+      campS["<b>campaign_service</b><br/>Campaign + checkpoints"]
+    end
+    dm["<b>dm_agent</b><br/>All Claude calls,<br/>prompts.py system prompts"]
+    tools["<b>tools</b><br/>search_checkpoints,<br/>roll_check (d20 + stat)"]
+  end
 
-  Container_Boundary(api, "dungeon-service") {
-    Component(authR, "auth router", "src/api/auth.py", "POST /auth/discord/callback")
-    Component(charR, "characters router", "src/api/characters.py", "Character CRUD, preview, classes/races, turn stream (SSE)")
-    Component(campR, "campaigns router", "src/api/campaigns.py", "Create/list campaigns, campaign characters")
-    Component(deps, "get_current_user", "src/api/dependencies.py", "Validates JWT, loads User")
+  db[("<b>PostgreSQL + pgvector</b>")]
+  discord["<b>Discord</b>"]
+  anthropic["<b>Anthropic Claude API</b>"]
+  voyage["<b>Voyage AI</b>"]
 
-    Component(authS, "auth_service", "Python", "Upserts Discord user, signs/validates JWT")
-    Component(charS, "character_service", "Python", "Character preview + persistence, lookups")
-    Component(campS, "campaign_service", "Python", "Parses campaign JSON, links checkpoints")
-    Component(turnS, "turn_service", "Python", "Turn context, SSE events, persists messages")
-    Component(embS, "embedding_service", "BackgroundTask", "Extracts + embeds + upserts memories")
+  web -- "OAuth code" --> authR
+  web -- "REST + SSE" --> charR
+  web -- "REST" --> campR
+  authR --> authS
+  authR -- "Token + user fetch" --> discord
+  charR --> charS
+  charR --> turnS
+  charR -. "after each turn" .-> embS
+  campR --> campS
+  charS -- "create_character" --> dm
+  turnS -- "process_turn_stream" --> dm
+  embS -- "extract_memories" --> dm
+  campS -- "create_campaign" --> dm
+  embS -- "embed" --> voyage
+  dm -- "runs tool calls" --> tools
+  dm -- "Messages API (streaming)" --> anthropic
+  services -- "SQLModel" --> db
+  tools -- "checkpoint search" --> db
 
-    Component(dm, "dm_agent", "Anthropic SDK", "All Claude calls: create_character, create_campaign, process_turn_stream, extract_memories")
-    Component(prompts, "prompts", "Python", "System prompts, build_turn_system_prompt")
-    Component(tools, "campaign_tools / dice_tools", "Tool use", "search_checkpoints, roll_check")
-  }
-
-  Rel(web, authR, "OAuth code")
-  Rel(web, charR, "REST + JWT")
-  Rel(web, campR, "REST + JWT")
-  Rel(charR, deps, "Depends")
-  Rel(campR, deps, "Depends")
-
-  Rel(authR, discord, "Token + user fetch")
-  Rel(authR, authS, "Calls")
-  Rel(charR, charS, "Calls")
-  Rel(charR, turnS, "Calls")
-  Rel(charR, embS, "Schedules after turn")
-  Rel(campR, campS, "Calls")
-
-  Rel(charS, dm, "create_character")
-  Rel(campS, dm, "create_campaign")
-  Rel(turnS, dm, "process_turn_stream")
-  Rel(embS, dm, "extract_memories")
-  Rel(dm, prompts, "Uses")
-  Rel(dm, tools, "Executes tool calls")
-  Rel(dm, anthropic, "Messages API")
-  Rel(embS, voyage, "embed")
-
-  Rel(tools, db, "Query checkpoints by tag")
-  Rel(turnS, db, "Load context, save messages")
-  Rel(embS, db, "Upsert memory rows")
-  Rel(authS, db, "Users")
-  Rel(charS, db, "Characters")
-  Rel(campS, db, "Campaigns, checkpoints")
+  classDef container fill:#438dd5,stroke:#2e6295,color:#fff
+  classDef component fill:#85bbf0,stroke:#5d82a8,color:#0b2340
+  classDef external fill:#6b6b6b,stroke:#4d4d4d,color:#fff
+  class web,db container
+  class authR,charR,campR,authS,charS,campS,turnS,embS,dm,tools component
+  class discord,anthropic,voyage external
+  style svc fill:none,stroke:#438dd5,stroke-width:2px,stroke-dasharray:6 4
+  style services fill:#eef5fc,stroke:#85bbf0
+  linkStyle default stroke:#707070,stroke-width:2.5px
 ```
 
 ## Dynamic: Playing a turn
