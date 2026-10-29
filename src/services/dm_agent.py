@@ -209,32 +209,6 @@ def extract_memories(player_message: str, dm_message: str) -> str | None:
     return None
 
 
-def process_turn(turn: dict, session) -> str:
-    character = turn["character"]
-    campaign = turn["campaign"]
-    checkpoint = turn["current_checkpoint"]
-    recent_messages = turn["recent_messages"]
-    player_message = turn["message"]
-
-    system_prompt = build_turn_system_prompt(campaign, character, checkpoint)
-
-    messages: list[MessageParam] = [
-        {"role": msg.role, "content": msg.content} for msg in recent_messages
-    ]
-    messages.append({"role": "user", "content": player_message})
-
-    response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=400,
-        system=system_prompt,
-        messages=messages,
-    )
-
-    if response.content and isinstance(response.content[0], TextBlock):
-        return response.content[0].text
-    raise ValueError("DM did not return a response")
-
-
 @dataclass
 class TextDelta:
     text: str

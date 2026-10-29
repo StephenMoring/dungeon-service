@@ -1,15 +1,22 @@
+import json
+from collections.abc import AsyncGenerator
+from dataclasses import asdict
+
+from fastapi import BackgroundTasks
 from sqlmodel import Session, col, select
+from src.db.db import engine
 from src.models.character import Character
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.message_history import MessageHistory
-from src.models.user import User
-from src.services.dm_agent import process_turn
+from src.services.dm_agent import TextDelta, process_turn_stream
+from src.services.embedding_service import extract_and_store_memories
+from src.tools.dice_tools import RollResult
 
 
-def take_turn(id: int, message: str, session: Session, user: User) -> str:
-    character = session.get(Character, id)
+def load_turn_context(character_id: int, message: str, session: Session) -> dict:
+    character = session.get(Character, character_id)
     if not character:
-        raise ValueError(f"Character {id} not found")
+        raise ValueError(f"Character {character_id} not found")
 
     campaign = session.get(Campaign, character.campaign_id)
     if not campaign:
@@ -41,7 +48,7 @@ def take_turn(id: int, message: str, session: Session, user: User) -> str:
     )
     recent_messages = list(reversed(session.exec(recent_messages_statement).all()))
 
-    turn_request = {
+    return {
         "character": character,
         "campaign": campaign,
         "current_checkpoint": current_checkpoint_detail,
@@ -49,27 +56,60 @@ def take_turn(id: int, message: str, session: Session, user: User) -> str:
         "message": message,
     }
 
-    response = process_turn(turn_request, session)
 
-    assert campaign.id is not None
-    assert character.id is not None
-
-    session.add(
-        MessageHistory(
-            campaign_id=campaign.id,
-            character_id=character.id,
-            role="user",
-            content=message,
+def save_turn(
+    campaign_id: int, character_id: int, player_message: str, dm_message: str
+) -> int:
+    # Runs after the response has started streaming, so it manages its own session.
+    with Session(engine) as session:
+        session.add(
+            MessageHistory(
+                campaign_id=campaign_id,
+                character_id=character_id,
+                role="user",
+                content=player_message,
+            )
         )
-    )
-    session.add(
-        MessageHistory(
-            campaign_id=campaign.id,
-            character_id=character.id,
+        dm = MessageHistory(
+            campaign_id=campaign_id,
+            character_id=character_id,
             role="assistant",
-            content=response,
+            content=dm_message,
         )
-    )
-    session.commit()
+        session.add(dm)
+        session.commit()
+        assert dm.id is not None
+        return dm.id
 
-    return response
+
+def sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+async def stream_turn(
+    turn: dict, background_tasks: BackgroundTasks
+) -> AsyncGenerator[str, None]:
+    campaign_id = turn["campaign"].id
+    character_id = turn["character"].id
+    player_message = turn["message"]
+
+    yield sse("thinking", {})
+    try:
+        text_parts: list[str] = []
+        async for event in process_turn_stream(turn):
+            if isinstance(event, RollResult):
+                yield sse("roll", asdict(event))
+            elif isinstance(event, TextDelta):
+                text_parts.append(event.text)
+                yield sse("text", {"text": event.text})
+
+        dm_message = "".join(text_parts)
+        message_id = save_turn(campaign_id, character_id, player_message, dm_message)
+    except Exception as e:
+        yield sse("error", {"detail": str(e)})
+        return
+
+    background_tasks.add_task(
+        extract_and_store_memories, campaign_id, [player_message, dm_message]
+    )
+    yield sse("done", {"message_id": message_id})

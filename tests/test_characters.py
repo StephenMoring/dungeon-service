@@ -1,7 +1,10 @@
 from unittest.mock import patch
 
+from src.models.campaign import Campaign
 from src.models.character import HeroClass, Race
 from src.models.message_history import MessageHistory
+from src.services.dm_agent import TextDelta
+from src.tools.dice_tools import RollResult
 from tests.conftest import make_character
 
 CHARACTER_BODY = {
@@ -145,67 +148,95 @@ class TestGetTurns:
         assert response.status_code == 403
 
 
-class TestPlayTurn:
-    @patch("src.api.characters.extract_and_store_memories")
-    @patch("src.api.characters.take_turn")
-    def test_returns_dm_message(self, mock_take_turn, mock_memories, client, session):
+async def fake_dm(_turn):
+    yield ROLL
+    yield TextDelta("They spot ")
+    yield TextDelta("you.")
+
+
+ROLL = RollResult(
+    stat="agility",
+    stat_value=6,
+    roll=7,
+    total=13,
+    difficulty="hard",
+    target=20,
+    success=False,
+    reason="sneak",
+)
+
+
+def turn_context():
+    return {
+        "character": make_character(campaign_id=7),
+        "campaign": Campaign(id=7, name="Thornwall", theme="gothic", description="d"),
+        "current_checkpoint": None,
+        "recent_messages": [],
+        "message": "I sneak",
+    }
+
+
+@patch("src.services.turn_service.extract_and_store_memories")
+@patch("src.services.turn_service.save_turn", return_value=99)
+@patch("src.services.turn_service.process_turn_stream", fake_dm)
+@patch("src.api.characters.load_turn_context")
+class TestPlayTurnStream:
+    def test_streams_events(self, mock_load, _save, _memories, client, session):
         session.get.return_value = make_character()
-        mock_take_turn.return_value = "The door creaks open."
+        mock_load.return_value = turn_context()
 
         response = client.post(
-            "/characters/1/turns", json={"message": "I open the door"}
+            "/characters/1/turns/stream", json={"message": "I sneak"}
         )
 
-        assert response.status_code == 201
-        assert response.json() == {"message": "The door creaks open."}
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        body = response.text
+        assert body.index("event: roll") < body.index("event: text")
+        assert body.index("event: text") < body.index("event: done")
 
-    @patch("src.api.characters.extract_and_store_memories")
-    @patch("src.api.characters.take_turn")
-    def test_schedules_memory_extraction(
-        self, mock_take_turn, mock_memories, client, session
+    def test_runs_memory_extraction_after_stream(
+        self, mock_load, _save, memories, client, session
     ):
-        session.get.return_value = make_character(campaign_id=7)
-        mock_take_turn.return_value = "The door creaks open."
+        session.get.return_value = make_character()
+        mock_load.return_value = turn_context()
 
-        client.post("/characters/1/turns", json={"message": "I open the door"})
+        client.post("/characters/1/turns/stream", json={"message": "I sneak"})
 
-        mock_memories.assert_called_once_with(
-            7, ["I open the door", "The door creaks open."]
-        )
+        memories.assert_called_once_with(7, ["I sneak", "They spot you."])
 
-    @patch("src.api.characters.extract_and_store_memories")
-    @patch("src.api.characters.take_turn")
     def test_returns_404_when_missing(
-        self, mock_take_turn, mock_memories, client, session
+        self, mock_load, _save, _memories, client, session
     ):
         session.get.return_value = None
 
-        response = client.post("/characters/1/turns", json={"message": "hi"})
+        response = client.post("/characters/1/turns/stream", json={"message": "hi"})
 
         assert response.status_code == 404
-        mock_take_turn.assert_not_called()
+        mock_load.assert_not_called()
 
-    @patch("src.api.characters.extract_and_store_memories")
-    @patch("src.api.characters.take_turn")
     def test_returns_403_for_other_users_character(
-        self, mock_take_turn, mock_memories, client, session
+        self, mock_load, _save, _memories, client, session
     ):
         session.get.return_value = make_character(user_id=2)
 
-        response = client.post("/characters/1/turns", json={"message": "hi"})
+        response = client.post("/characters/1/turns/stream", json={"message": "hi"})
 
         assert response.status_code == 403
-        mock_take_turn.assert_not_called()
+        mock_load.assert_not_called()
 
-    @patch("src.api.characters.extract_and_store_memories")
-    @patch("src.api.characters.take_turn")
-    def test_returns_502_when_turn_fails(
-        self, mock_take_turn, mock_memories, client, session
+    def test_returns_502_when_context_fails(
+        self, mock_load, _save, _memories, client, session
     ):
         session.get.return_value = make_character()
-        mock_take_turn.side_effect = ValueError("DM did not return a response")
+        mock_load.side_effect = ValueError("Checkpoint for campaign could not be found")
 
-        response = client.post("/characters/1/turns", json={"message": "hi"})
+        response = client.post("/characters/1/turns/stream", json={"message": "hi"})
 
         assert response.status_code == 502
-        mock_memories.assert_not_called()
+        assert response.json()["detail"] == "Checkpoint for campaign could not be found"
+
+    def test_old_turn_route_is_gone(self, _load, _save, _memories, client):
+        response = client.post("/characters/1/turns", json={"message": "hi"})
+
+        assert response.status_code == 405

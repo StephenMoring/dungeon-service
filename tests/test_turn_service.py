@@ -1,3 +1,5 @@
+import json
+from dataclasses import asdict
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -6,7 +8,14 @@ from sqlalchemy.dialects import postgresql
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.character import Character
 from src.models.message_history import MessageHistory
-from src.services.turn_service import take_turn
+from src.services.dm_agent import TextDelta
+from src.services.turn_service import (
+    load_turn_context,
+    save_turn,
+    stream_turn,
+)
+from src.tools.dice_tools import RollResult
+from src.services.embedding_service import extract_and_store_memories
 from tests.conftest import make_character
 
 
@@ -47,18 +56,8 @@ def compiled_sql(statement) -> str:
     )
 
 
-class TestTakeTurn:
-    @patch("src.services.turn_service.process_turn")
-    def test_returns_dm_response(self, mock_process_turn, user):
-        mock_process_turn.return_value = "The gate groans open."
-
-        result = take_turn(1, "I push the gate", default_session(), user)
-
-        assert result == "The gate groans open."
-
-    @patch("src.services.turn_service.process_turn")
-    def test_passes_context_to_dm(self, mock_process_turn, user):
-        mock_process_turn.return_value = "ok"
+class TestLoadTurnContext:
+    def test_passes_context(self):
         newest_first = [
             MessageHistory(
                 id=2, campaign_id=1, character_id=1, role="assistant", content="b"
@@ -69,35 +68,18 @@ class TestTakeTurn:
         ]
         session = default_session(history=newest_first)
 
-        take_turn(1, "I push the gate", session, user)
+        turn = load_turn_context(1, "I push the gate", session)
 
-        turn = mock_process_turn.call_args.args[0]
         assert turn["character"].name == "Gandalf"
         assert turn["campaign"].name == "Thornwall"
         assert turn["current_checkpoint"].title == "The Gate"
         assert turn["message"] == "I push the gate"
         assert [m.content for m in turn["recent_messages"]] == ["a", "b"]
 
-    @patch("src.services.turn_service.process_turn")
-    def test_persists_player_and_dm_messages(self, mock_process_turn, user):
-        mock_process_turn.return_value = "The gate groans open."
+    def test_active_checkpoint_skips_complete_and_locked(self):
         session = default_session()
 
-        take_turn(1, "I push the gate", session, user)
-
-        saved = [c.args[0] for c in session.add.call_args_list]
-        assert [(m.role, m.content) for m in saved] == [
-            ("user", "I push the gate"),
-            ("assistant", "The gate groans open."),
-        ]
-        session.commit.assert_called_once()
-
-    @patch("src.services.turn_service.process_turn")
-    def test_active_checkpoint_skips_complete_and_locked(self, mock_process_turn, user):
-        mock_process_turn.return_value = "ok"
-        session = default_session()
-
-        take_turn(1, "hi", session, user)
+        load_turn_context(1, "hi", session)
 
         checkpoint_query = compiled_sql(session.exec.call_args_list[0].args[0])
         assert "NOT IN ('complete', 'locked')" in checkpoint_query
@@ -110,11 +92,133 @@ class TestTakeTurn:
             ({"checkpoint_link": None}, "Checkpoint for campaign"),
         ],
     )
-    @patch("src.services.turn_service.process_turn")
-    def test_raises_when_context_missing(
-        self, mock_process_turn, overrides, error, user
-    ):
+    def test_raises_when_context_missing(self, overrides, error):
         with pytest.raises(ValueError, match=error):
-            take_turn(1, "hi", default_session(**overrides), user)
+            load_turn_context(1, "hi", default_session(**overrides))
 
-        mock_process_turn.assert_not_called()
+
+ROLL = RollResult(
+    stat="agility",
+    stat_value=6,
+    roll=7,
+    total=13,
+    difficulty="hard",
+    target=20,
+    success=False,
+    reason="sneak",
+)
+
+
+def make_turn():
+    return {
+        "character": make_character(),
+        "campaign": Campaign(id=1, name="Thornwall", theme="gothic", description="d"),
+        "current_checkpoint": None,
+        "recent_messages": [],
+        "message": "I sneak",
+    }
+
+
+def fake_dm(*events, error=None):
+    async def gen(_turn):
+        for event in events:
+            yield event
+        if error:
+            raise error
+
+    return gen
+
+
+def parse_sse(chunks: list[str]) -> list[tuple[str, dict]]:
+    parsed = []
+    for chunk in chunks:
+        event_line, data_line = chunk.strip().split("\n")
+        parsed.append(
+            (event_line.removeprefix("event: "), json.loads(data_line[len("data: ") :]))
+        )
+    return parsed
+
+
+async def run_stream(background_tasks=None) -> list[tuple[str, dict]]:
+    tasks = background_tasks or MagicMock()
+    return parse_sse([chunk async for chunk in stream_turn(make_turn(), tasks)])
+
+
+@pytest.mark.anyio
+class TestStreamTurn:
+    @patch("src.services.turn_service.save_turn", return_value=42)
+    async def test_stream_event_order(self, _save):
+        with patch(
+            "src.services.turn_service.process_turn_stream",
+            fake_dm(ROLL, TextDelta("a"), TextDelta("b")),
+        ):
+            events = await run_stream()
+
+        assert [name for name, _ in events] == [
+            "thinking",
+            "roll",
+            "text",
+            "text",
+            "done",
+        ]
+        assert events[1][1] == asdict(ROLL)
+        assert events[2][1] == {"text": "a"}
+        assert events[-1][1] == {"message_id": 42}
+
+    @patch("src.services.turn_service.save_turn", return_value=42)
+    async def test_saves_concatenated_text(self, save):
+        with patch(
+            "src.services.turn_service.process_turn_stream",
+            fake_dm(ROLL, TextDelta("a"), TextDelta("b")),
+        ):
+            await run_stream()
+
+        save.assert_called_once_with(1, 1, "I sneak", "ab")
+
+    @patch("src.services.turn_service.save_turn", return_value=42)
+    async def test_schedules_memory_extraction(self, _save):
+        tasks = MagicMock()
+        with patch(
+            "src.services.turn_service.process_turn_stream",
+            fake_dm(TextDelta("a"), TextDelta("b")),
+        ):
+            await run_stream(tasks)
+
+        tasks.add_task.assert_called_once_with(
+            extract_and_store_memories, 1, ["I sneak", "ab"]
+        )
+
+    @patch("src.services.turn_service.save_turn")
+    async def test_error_after_roll_saves_nothing(self, save):
+        tasks = MagicMock()
+        with patch(
+            "src.services.turn_service.process_turn_stream",
+            fake_dm(ROLL, error=ValueError("boom")),
+        ):
+            events = await run_stream(tasks)
+
+        assert events[-1] == ("error", {"detail": "boom"})
+        save.assert_not_called()
+        tasks.add_task.assert_not_called()
+
+
+class TestSaveTurn:
+    @patch("src.services.turn_service.Session")
+    def test_save_turn_persists_both_messages(self, session_cls):
+        session = session_cls.return_value.__enter__.return_value
+
+        def assign_ids():
+            for i, call in enumerate(session.add.call_args_list, start=1):
+                call.args[0].id = i
+
+        session.commit.side_effect = assign_ids
+
+        message_id = save_turn(1, 1, "I sneak", "Caught.")
+
+        saved = [c.args[0] for c in session.add.call_args_list]
+        assert [(m.role, m.content) for m in saved] == [
+            ("user", "I sneak"),
+            ("assistant", "Caught."),
+        ]
+        session.commit.assert_called_once()
+        assert message_id == 2
