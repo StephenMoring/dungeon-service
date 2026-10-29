@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
 
@@ -61,3 +62,24 @@ def tool_use_response(tool_name: str, tool_input: dict) -> Message:
         ],
         "tool_use",
     )
+
+
+class FakeStream:
+    """Stands in for `async_client.messages.stream(...)`: yields text events, then a final Message."""
+
+    def __init__(self, texts: list[str], final: Message):
+        self.texts = texts
+        self.final = final
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def __aiter__(self):
+        for text in self.texts:
+            yield SimpleNamespace(type="text", text=text)
+
+    async def get_final_message(self) -> Message:
+        return self.final

@@ -1,8 +1,10 @@
 import os
+from dataclasses import dataclass
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types import MessageParam, TextBlock, ToolUseBlock
-from typing import AsyncGenerator
+from typing import AsyncGenerator, cast
 from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
+from src.tools.dice_tools import RollResult, handle_roll_check, roll_check_tool
 from src.services.prompts import (
     build_turn_system_prompt,
     campaign_creation_prompt,
@@ -160,7 +162,10 @@ MEMORIES_SCHEMA = {
                     "name": {"type": "string"},
                     "description": {"type": "string"},
                     "where_found": {"type": "string"},
-                    "status": {"type": "string", "enum": ["held", "lost", "used", "given away"]},
+                    "status": {
+                        "type": "string",
+                        "enum": ["held", "lost", "used", "given away"],
+                    },
                 },
                 "required": ["name", "description", "where_found", "status"],
                 "additionalProperties": False,
@@ -172,7 +177,10 @@ MEMORIES_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "summary": {"type": "string"},
-                    "category": {"type": "string", "enum": ["decision", "revelation", "deal", "consequence"]},
+                    "category": {
+                        "type": "string",
+                        "enum": ["decision", "revelation", "deal", "consequence"],
+                    },
                 },
                 "required": ["summary", "category"],
                 "additionalProperties": False,
@@ -227,7 +235,16 @@ def process_turn(turn: dict, session) -> str:
     raise ValueError("DM did not return a response")
 
 
-async def process_turn_stream(turn: dict) -> AsyncGenerator[str, None]:
+@dataclass
+class TextDelta:
+    text: str
+
+
+async def process_turn_stream(
+    turn: dict,
+) -> AsyncGenerator[TextDelta | RollResult, None]:
+    """Stream a DM turn. Claude may call roll_check once; the server rolls and the
+    reply continues with tools disabled."""
     character = turn["character"]
     campaign = turn["campaign"]
     checkpoint = turn["current_checkpoint"]
@@ -243,9 +260,51 @@ async def process_turn_stream(turn: dict) -> AsyncGenerator[str, None]:
 
     async with async_client.messages.stream(
         model="claude-sonnet-4-5-20250929",
-        max_tokens=400,
+        max_tokens=1024,
         system=system_prompt,
         messages=messages,
+        tools=[roll_check_tool],
     ) as stream:
-        async for text in stream.text_stream:
-            yield text
+        async for event in stream:
+            if event.type == "text":
+                yield TextDelta(event.text)
+        final = await stream.get_final_message()
+
+    if final.stop_reason != "tool_use":
+        return
+
+    tool_use = next(b for b in final.content if isinstance(b, ToolUseBlock))
+    if tool_use.name != "roll_check":
+        raise ValueError(f"Unexpected tool call: {tool_use.name}")
+
+    tool_input = cast(dict, tool_use.input)
+    roll = handle_roll_check(
+        character, tool_input["stat"], tool_input["difficulty"], tool_input["reason"]
+    )
+    yield roll
+
+    messages.append({"role": "assistant", "content": final.content})
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_use.id,
+                    "content": roll.to_tool_result(),
+                }
+            ],
+        }
+    )
+
+    async with async_client.messages.stream(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=messages,
+        tools=[roll_check_tool],
+        tool_choice={"type": "none"},
+    ) as stream:
+        async for event in stream:
+            if event.type == "text":
+                yield TextDelta(event.text)
