@@ -35,9 +35,9 @@ uv run mypy src
 **Layered design**: FastAPI routers (`src/api/`) → services (`src/services/`) → `dm_agent.py` (Claude) → PostgreSQL + pgvector
 
 **Services**:
-- `dm_agent.py` - Anthropic clients and all LLM calls: `create_character()` (structured output via `output_config`), `create_campaign()` (tool_use loop), `process_turn()`, `process_turn_stream()` (not wired to a route), `extract_memories()`
+- `dm_agent.py` - Anthropic clients and all LLM calls: `create_character()` (structured output via `output_config`), `create_campaign()` (tool_use loop), `process_turn_stream()` (async; yields `TextDelta` and at most one `RollResult` via the `roll_check` tool, second request uses `tool_choice: none`), `extract_memories()`
 - `prompts.py` - Prompt strings and `build_turn_system_prompt()` (campaign + character + checkpoint context)
-- `turn_service.py` - Loads character → campaign → active checkpoint → last 10 messages, calls `process_turn`, persists user + assistant messages to `messagehistory`
+- `turn_service.py` - `load_turn_context()` loads character → campaign → active checkpoint → last 10 messages; `stream_turn()` turns `process_turn_stream` output into SSE events (`thinking`, `roll`, `text`, `done`, `error`), then `save_turn()` persists both messages with its own `Session(engine)` and schedules memory extraction. Nothing is saved on error
 - `embedding_service.py` - `extract_and_store_memories()` runs as a FastAPI BackgroundTask after each turn: extracts NPC/location/item/event memories, embeds with Voyage `voyage-3.5` (1024 dims), upserts by name per campaign
 - `campaign_service.py` - Verifies the requesting user owns `character_id`, calls `create_campaign`, persists the campaign + ordered checkpoints (first `new`, rest `locked`), assigns the character to it, and saves the opening message as the first assistant `messagehistory` row
 - `character_service.py` - `create_preview()` generates a sheet via dm_agent without saving; `create()` saves a client-submitted character for the current user
@@ -45,7 +45,7 @@ uv run mypy src
 
 **Auth**: `src/api/dependencies.py:get_current_user` validates the Bearer JWT; all routes except `/health` and `/auth/*` depend on it. Character routes also check `character.user_id == user.id`.
 
-**Tools**: `src/tools/campaign_tools.py` - `search_checkpoints` tool definition + handler used during campaign creation
+**Tools**: `src/tools/campaign_tools.py` - `search_checkpoints` (campaign creation). `src/tools/dice_tools.py` - `roll_check` (turns): d20 + stat vs easy 10 / medium 15 / hard 20, ties pass; `roll_d20()` is the patch point for tests
 
 **Database tables**: `user`, `campaign`, `character`, `checkpoint`, `campaigncheckpoint` (ordered checkpoints per campaign with status/summary), `heroclass`, `race`, `messagehistory`, and memory tables `npcmemory`, `locationmemory`, `itemmemory`, `eventmemory` (each with `vector(1024)` + HNSW cosine index)
 
@@ -54,8 +54,9 @@ uv run mypy src
 ## Testing
 
 - Tests never hit a real DB or LLM. `tests/conftest.py` provides `client` (auth + session overridden via `app.dependency_overrides`), `anon_client` (real JWT auth, mocked session), `session` (MagicMock), `user`, and `make_character()`
-- Patch service functions where the router imports them (e.g. `src.api.characters.take_turn`)
-- Always patch `src.api.characters.extract_and_store_memories` in turn route tests. TestClient runs background tasks, so an unpatched turn test calls Claude and Voyage for real
+- Patch service functions where the router imports them (e.g. `src.api.characters.load_turn_context`)
+- Always patch `src.services.turn_service.extract_and_store_memories` in turn route tests. TestClient runs background tasks, so an unpatched turn test calls Claude and Voyage for real
+- Async tests use `@pytest.mark.anyio` (anyio's pytest plugin ships with FastAPI). `tests/helpers.py:FakeStream` stands in for `async_client.messages.stream`
 - `src/config` raises at import if env vars are missing, so `.env` must exist to run tests
 
 ## Tech Stack

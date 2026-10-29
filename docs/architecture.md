@@ -66,19 +66,19 @@ C4Component
 
   Container_Boundary(api, "dungeon-service") {
     Component(authR, "auth router", "src/api/auth.py", "POST /auth/discord/callback")
-    Component(charR, "characters router", "src/api/characters.py", "Character CRUD, preview, classes/races, turns")
+    Component(charR, "characters router", "src/api/characters.py", "Character CRUD, preview, classes/races, turn stream (SSE)")
     Component(campR, "campaigns router", "src/api/campaigns.py", "Create/list campaigns, campaign characters")
     Component(deps, "get_current_user", "src/api/dependencies.py", "Validates JWT, loads User")
 
     Component(authS, "auth_service", "Python", "Upserts Discord user, signs/validates JWT")
     Component(charS, "character_service", "Python", "Character preview + persistence, lookups")
     Component(campS, "campaign_service", "Python", "Parses campaign JSON, links checkpoints")
-    Component(turnS, "turn_service", "Python", "Assembles turn context, persists messages")
+    Component(turnS, "turn_service", "Python", "Turn context, SSE events, persists messages")
     Component(embS, "embedding_service", "BackgroundTask", "Extracts + embeds + upserts memories")
 
-    Component(dm, "dm_agent", "Anthropic SDK", "All Claude calls: create_character, create_campaign, process_turn, extract_memories")
+    Component(dm, "dm_agent", "Anthropic SDK", "All Claude calls: create_character, create_campaign, process_turn_stream, extract_memories")
     Component(prompts, "prompts", "Python", "System prompts, build_turn_system_prompt")
-    Component(tools, "campaign_tools", "Tool use", "search_checkpoints definition + handler")
+    Component(tools, "campaign_tools / dice_tools", "Tool use", "search_checkpoints, roll_check")
   }
 
   Rel(web, authR, "OAuth code")
@@ -96,7 +96,7 @@ C4Component
 
   Rel(charS, dm, "create_character")
   Rel(campS, dm, "create_campaign")
-  Rel(turnS, dm, "process_turn")
+  Rel(turnS, dm, "process_turn_stream")
   Rel(embS, dm, "extract_memories")
   Rel(dm, prompts, "Uses")
   Rel(dm, tools, "Executes tool calls")
@@ -121,26 +121,32 @@ sequenceDiagram
   participant T as turn_service
   participant DM as dm_agent
   participant C as Claude
+  participant Dice as roll_check
   participant DB as Postgres
   participant BG as embedding_service (background)
-  participant V as Voyage AI
 
-  Web->>R: POST /characters/{id}/turns {message}
+  Web->>R: POST /characters/{id}/turns/stream {message}
   R->>R: get_current_user + ownership check
-  R->>T: take_turn()
-  T->>DB: load character, campaign, active checkpoint, last 10 messages
-  T->>DM: process_turn(context)
-  DM->>C: messages.create(system prompt + history + message)
-  C-->>DM: narration
-  T->>DB: insert user + assistant messagehistory
-  R-->>Web: 201 {message}
+  R->>T: load_turn_context()
+  T->>DB: character, campaign, active checkpoint, last 10 messages
+  R-->>Web: SSE stream opens
+  T-->>Web: event: thinking
+  T->>DM: process_turn_stream(turn)
+  DM->>C: stream(tools=[roll_check])
+  opt outcome is uncertain
+    C-->>DM: tool_use roll_check(stat, difficulty, reason)
+    DM->>Dice: d20 + stat vs target
+    T-->>Web: event: roll
+    DM->>C: stream(tool_result, tool_choice=none)
+  end
+  C-->>DM: narration deltas
+  T-->>Web: event: text (repeated)
+  T->>DB: save user + assistant messages
+  T-->>Web: event: done
   R-)BG: extract_and_store_memories(campaign_id, [player, dm])
-  BG->>C: extract_memories → NPC/location/item/event JSON
-  BG->>V: embed memory texts
-  BG->>DB: upsert memory rows (vector 1024)
 ```
 
-Memories are written after every turn, but nothing reads them back into the turn prompt yet.
+Rolls are never stored. Memories are written after every turn, but nothing reads them back into the turn prompt yet.
 
 ## Dynamic: Creating a campaign
 
