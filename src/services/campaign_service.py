@@ -1,8 +1,13 @@
 import json
-from sqlmodel import Session
+from collections import defaultdict
+
+from sqlmodel import Session, col, select
+
 from src.models.campaign import (
     Campaign,
     CampaignCheckpoint,
+    CampaignCheckpointRead,
+    CampaignWithDetails,
     CreateCampaignResponse,
     CreateCampaignRequest,
 )
@@ -68,3 +73,52 @@ def create(
     return CreateCampaignResponse(
         campaign=new_campaign, opening_message=opening_message
     )
+
+
+def list_for_user(session: Session, user: User) -> list[CampaignWithDetails]:
+    """The user's campaigns, each with the user's characters in it and its checkpoints in order."""
+    # Campaigns have no owner column; a campaign belongs to whoever owns its character.
+    campaigns = session.exec(
+        select(Campaign)
+        .join(Character, col(Character.campaign_id) == Campaign.id)
+        .where(Character.user_id == user.id)
+        .distinct()
+    ).all()
+    if not campaigns:
+        return []
+    campaign_ids = [c.id for c in campaigns]
+
+    characters = session.exec(
+        select(Character).where(
+            col(Character.campaign_id).in_(campaign_ids),
+            Character.user_id == user.id,
+        )
+    ).all()
+    checkpoints = session.exec(
+        select(CampaignCheckpoint)
+        .where(col(CampaignCheckpoint.campaign_id).in_(campaign_ids))
+        .order_by(col(CampaignCheckpoint.campaign_id), col(CampaignCheckpoint.order))
+    ).all()
+
+    characters_by_campaign: dict[int | None, list[Character]] = defaultdict(list)
+    for character in characters:
+        characters_by_campaign[character.campaign_id].append(character)
+    checkpoints_by_campaign: dict[int, list[CampaignCheckpointRead]] = defaultdict(list)
+    for checkpoint in checkpoints:
+        checkpoints_by_campaign[checkpoint.campaign_id].append(
+            CampaignCheckpointRead.model_validate(checkpoint, from_attributes=True)
+        )
+
+    return [
+        CampaignWithDetails(
+            id=campaign.id,
+            name=campaign.name,
+            theme=campaign.theme,
+            description=campaign.description,
+            characters=characters_by_campaign[campaign.id],
+            campaign_checkpoints=checkpoints_by_campaign[campaign.id]
+            if campaign.id
+            else [],
+        )
+        for campaign in campaigns
+    ]

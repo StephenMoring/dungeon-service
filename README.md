@@ -59,7 +59,7 @@ All routes except `/health` and `/auth/*` need a `Bearer` JWT. Routes only retur
 | GET | `/characters/{id}` | One of your characters |
 | GET | `/characters/{id}/turns` | Message history for your character |
 | POST | `/characters/{id}/turns/stream` | Play a turn (SSE: `thinking`, `roll`, `text`, `done`, `error`) |
-| GET | `/campaigns/` | Your campaigns |
+| GET | `/campaigns/` | Your campaigns, each with your characters in it and its checkpoints in order |
 | POST | `/campaigns/` | Generate and save a campaign for one of your characters |
 | GET | `/campaigns/{id}/characters` | Your characters in a campaign |
 | GET | `/health` | Health check |

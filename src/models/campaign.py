@@ -1,6 +1,8 @@
 from typing import Optional
 from sqlmodel import Field, Relationship, SQLModel
 
+from src.models.character import Character
+
 
 class Campaign(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -11,6 +13,25 @@ class Campaign(SQLModel, table=True):
         back_populates="campaign"
     )
     description: str
+
+
+class CampaignCheckpointRead(SQLModel):
+    id: int | None
+    checkpoint_id: int
+    order: int
+    status: str
+    summary: str | None
+
+
+class CampaignWithDetails(SQLModel):
+    """A campaign with the current user's characters in it and its checkpoints in order."""
+
+    id: int | None
+    name: str
+    theme: str
+    description: str
+    characters: list[Character]
+    campaign_checkpoints: list[CampaignCheckpointRead]
 
 
 class CreateCampaignRequest(SQLModel):

@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, col, select
+from sqlmodel import Session, select
 from src.db.db import get_session
-from src.models.campaign import Campaign, CreateCampaignResponse, CreateCampaignRequest
+from src.models.campaign import (
+    CampaignWithDetails,
+    CreateCampaignRequest,
+    CreateCampaignResponse,
+)
 from src.models.character import Character
 from src.models.user import User
 from src.api.dependencies import get_current_user
-from src.services.campaign_service import create
+from src.services.campaign_service import create, list_for_user
 
 campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -25,14 +29,8 @@ def create_campaign(
 @campaigns_router.get("/")
 def list_campaigns(
     session: Session = Depends(get_session), user: User = Depends(get_current_user)
-):
-    # Campaigns have no owner column; a campaign belongs to whoever owns its character.
-    return session.exec(
-        select(Campaign)
-        .join(Character, col(Character.campaign_id) == Campaign.id)
-        .where(Character.user_id == user.id)
-        .distinct()
-    ).all()
+) -> list[CampaignWithDetails]:
+    return list_for_user(session, user)
 
 
 @campaigns_router.get("/{id}/characters")
