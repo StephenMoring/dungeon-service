@@ -24,6 +24,13 @@ def no_memory_lookup():
         yield
 
 
+@pytest.fixture(autouse=True)
+def no_rate_limits():
+    """Route tests don't count Claude calls unless they patch check_and_record."""
+    with patch("src.api.dependencies.check_and_record"):
+        yield
+
+
 # Sent by dungeon-web on every request; the API refuses writes without it (CSRF).
 FRONTEND_HEADERS = {"X-Requested-With": "dungeon-web"}
 

@@ -5,6 +5,7 @@ from src.models.character import HeroClass, Race
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta
 from src.services.prompts import known_context
+from src.services.usage_service import RateLimited
 from src.tools.dice_tools import RollResult
 from tests.conftest import make_character
 
@@ -259,3 +260,45 @@ class TestPlayTurnStream:
         response = client.post("/characters/1/turns", json={"message": "hi"})
 
         assert response.status_code == 405
+
+
+class TestClaudeRateLimits:
+    """Routes that call Claude check the caller's limit before doing so."""
+
+    @patch("src.api.dependencies.check_and_record")
+    @patch("src.api.characters.create_preview", return_value={})
+    def test_preview_is_limited(self, _preview, check, client, session, user):
+        client.post("/characters/preview", json=PREVIEW_BODY)
+
+        check.assert_called_once_with(session, user, "preview")
+
+    @patch("src.api.characters.create_preview")
+    @patch(
+        "src.api.dependencies.check_and_record",
+        side_effect=RateLimited(42, "You're going too fast."),
+    )
+    def test_over_the_limit_returns_429_without_calling_claude(
+        self, _check, preview, client
+    ):
+        response = client.post("/characters/preview", json=PREVIEW_BODY)
+
+        assert response.status_code == 429
+        assert response.headers["retry-after"] == "42"
+        assert response.json()["detail"] == "You're going too fast."
+        preview.assert_not_called()
+
+    @patch("src.api.characters.stream_turn")
+    @patch("src.api.characters.load_turn_context")
+    @patch("src.api.dependencies.check_and_record")
+    def test_turn_is_limited_after_the_ownership_check(
+        self, check, _load, stream, client, session, user
+    ):
+        stream.return_value = iter([])
+        session.get.return_value = make_character(user_id=2)
+
+        client.post("/characters/1/turns/stream", json={"message": "hi"})
+        check.assert_not_called()  # someone else's character: refused, not counted
+
+        session.get.return_value = make_character()
+        client.post("/characters/1/turns/stream", json={"message": "hi"})
+        check.assert_called_once_with(session, user, "turn")

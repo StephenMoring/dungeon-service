@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from src.models.campaign import Campaign, CampaignCheckpoint, CreateCampaignResponse
+from src.services.usage_service import RateLimited
 from tests.conftest import compiled_sql, make_character
 
 DESCRIPTION_TEXT = "A dark gothic city riven by political scheming and ancient evil"
@@ -156,3 +157,28 @@ class TestDeleteCampaign:
 
     def test_requires_auth(self, anon_client):
         assert anon_client.delete("/campaigns/3").status_code in (401, 403)
+
+
+class TestCampaignRateLimit:
+    @patch("src.api.campaigns.create")
+    @patch("src.api.dependencies.check_and_record")
+    def test_creation_is_limited(self, check, create, client, session, user):
+        create.return_value = CreateCampaignResponse(
+            campaign=make_campaign(), opening_message="hi"
+        )
+
+        client.post("/campaigns/", json=CREATE_BODY)
+
+        check.assert_called_once_with(session, user, "campaign")
+
+    @patch("src.api.campaigns.create")
+    @patch(
+        "src.api.dependencies.check_and_record",
+        side_effect=RateLimited(600, "You've reached today's limit."),
+    )
+    def test_over_the_limit_returns_429(self, _check, create, client):
+        response = client.post("/campaigns/", json=CREATE_BODY)
+
+        assert response.status_code == 429
+        assert response.headers["retry-after"] == "600"
+        create.assert_not_called()

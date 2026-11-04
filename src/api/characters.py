@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
-from src.api.dependencies import get_current_user
+from src.api.dependencies import enforce_limit, get_current_user
 from src.db.db import get_session
 from src.models.character import (
     Character,
@@ -50,8 +50,10 @@ def create_character(
 @character_router.post("/preview", status_code=201)
 def create_character_preview(
     character_description: CharacterDescriptionCreate,
-    _: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
 ):
+    enforce_limit(session, user, "preview")
     try:
         return create_preview(character_description)
     except ValueError as e:
@@ -113,6 +115,7 @@ def play_turn_stream(
         raise HTTPException(status_code=404, detail="Character not found")
     if character.user_id != user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
+    enforce_limit(session, user, "turn")
     try:
         turn = load_turn_context(id, turn_request.message, session)
     except ValueError as e:

@@ -8,7 +8,7 @@ from src.models.campaign import (
 )
 from src.models.character import Character
 from src.models.user import User
-from src.api.dependencies import get_current_user
+from src.api.dependencies import enforce_limit, get_current_user
 from src.services.campaign_service import create, delete_for_user, list_for_user
 
 campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
@@ -20,6 +20,7 @@ def create_campaign(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ) -> CreateCampaignResponse:
+    enforce_limit(session, user, "campaign")
     try:
         return create(campaign_description, session, user)
     except ValueError as e:

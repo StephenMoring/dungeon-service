@@ -12,6 +12,7 @@ The frontend is the sibling repo `../dungeon-web`. Its Vite dev server (`http://
 - **Streaming turns**: Each player message goes to Claude with the campaign, character sheet, active checkpoint, relevant campaign memories and the last 10 messages. The reply streams back as Server-Sent Events (`thinking`, `roll`, `text`, `done`, `error`). Both sides of the exchange are saved when the stream finishes; nothing is saved if it fails.
 - **Dice checks**: When an action's outcome is uncertain and failure would matter (sneaking, persuading, spotting something hidden), Claude calls the `roll_check` tool with a stat, a difficulty and a reason. The server rolls a d20 and adds the stat, and the action passes if the total meets the target: easy 10, medium 15, hard 20 (ties pass). The result streams to the browser as a `roll` event, which the frontend animates before revealing the narration. Claude must narrate failures as failures. At most one roll per turn, and rolls are not stored.
 - **Campaign memory (RAG)**: After each turn, a background task asks Claude to extract NPCs, locations, items and events from the exchange, embeds them with Voyage AI (`voyage-3.5`, 1024 dimensions), and upserts them into pgvector tables per campaign. Before each turn, the DM's last reply plus the player's message are embedded as a search query, and a cosine-similarity search pulls up to 3 close matches of each kind from that campaign (cutoff: cosine distance 0.6). The matches go into the DM's prompt as "What You Remember", including secrets the player has uncovered, so the DM stays consistent with what the player knows and characters' lies can be caught. If the lookup fails, the turn continues without memories.
+- **Limits on Claude calls**: Turns, character previews and campaign creation are limited per user (per minute and per rolling 24 hours) and for everyone together (per 24 hours), so one player, or many free Discord accounts, can't run up the API bill. Defaults: turns 10/min, 300/day, 3,000/day overall; previews 5/min, 30/day, 300/day overall; campaigns 2/min, 10/day, 100/day overall (`src/services/usage_service.py:LIMITS`). Over a limit, the route answers 429 with `Retry-After` and a message for the player. Each accepted call is a row in `llmusage`, so limits hold across restarts; a call counts even if Claude then fails.
 - **Per-user data**: All users share one database, and every route that returns player data filters by the signed-in user. Characters carry a `user_id`; campaigns belong to whoever owns their character. Checkpoints, classes and races are shared content.
 
 ## Stack
@@ -136,6 +137,8 @@ A Voyage account with no payment method is limited to 3 requests a minute. The r
 
 ## Known gaps
 
+- `llmusage` rows are never pruned; only the last 24 hours are read, so old rows can be deleted at any time
+- Two simultaneous requests can both pass a limit check that only one should (no lock); fine for per-minute bursts, at most a request or two over
 - `mypy src` reports one existing error: `pgvector.sqlalchemy` ships no type stubs (`models/memory.py`)
 - Saving a turn runs synchronously inside the stream; fine for a few players, not for many at once
 - The DM's stat and difficulty choices are limited by the tool schema but not re-checked on the server
