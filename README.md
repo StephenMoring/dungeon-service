@@ -126,6 +126,8 @@ A Voyage account with no payment method is limited to 3 requests a minute. The r
 ## Roadmap
 
 - Tune memory retrieval (per-kind limit, distance cutoff) from real play
+- Memory extraction: store what a character says as a claim ("Says...", "Claims..."), never as a plain fact. The `silk_merchant` recall scenario scores 1-2/10 because the liar's robbery story is stored as a known fact next to the secret that he lied, and the DM lets the lie pass when he repeats it to someone else. Re-run `silk_merchant` and `ashford_control` after the change. (The wording fix on branch `claude/dm-notices-overheard-lies` did not help.)
+- Remove duplicate facts when merging a known NPC's record (an alibi can end up stored twice)
 - Checkpoint progression: detect when an objective is done, summarize it, move to the next checkpoint
 - Tune how often the DM calls for rolls, based on real play
 
