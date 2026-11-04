@@ -2,15 +2,21 @@ import json
 from collections.abc import Sequence
 from sqlmodel import Session, select, col
 from src.models.campaign import Campaign
-from src.models.character import Character, CharacterDescriptionCreate, HeroClass, Race
+from src.models.character import (
+    Character,
+    CharacterCreate,
+    CharacterDescriptionCreate,
+    HeroClass,
+    Race,
+)
 from src.models.message_history import MessageHistory
 from src.models.user import User
 from src.services.dm_agent import create_character
 
 
-def create(character: Character, session: Session, user: User) -> Character:
+def create(details: CharacterCreate, session: Session, user: User) -> Character:
     assert user.id is not None
-    character.user_id = user.id
+    character = Character(**details.model_dump(), user_id=user.id)
     session.add(character)
     session.commit()
     session.refresh(character)

@@ -53,7 +53,7 @@ All routes except `/health` and `/auth/*` need a `Bearer` JWT. Routes only retur
 | --- | --- | --- |
 | POST | `/auth/discord/callback` | Exchange a Discord OAuth code for a JWT |
 | GET | `/characters/` | Your characters, each with its campaign |
-| POST | `/characters/` | Save a character |
+| POST | `/characters/` | Save a character (name, class, biography, description, age, stats; the server sets the owner, and only campaign creation puts a character in a campaign) |
 | POST | `/characters/preview` | Generate a character sheet without saving |
 | GET | `/characters/classes` | List classes |
 | GET | `/characters/races` | List races |
@@ -63,6 +63,7 @@ All routes except `/health` and `/auth/*` need a `Bearer` JWT. Routes only retur
 | GET | `/campaigns/` | Your campaigns, each with your characters in it and its checkpoints in order |
 | POST | `/campaigns/` | Generate and save a campaign for one of your characters |
 | GET | `/campaigns/{id}/characters` | Your characters in a campaign |
+| DELETE | `/campaigns/{id}` | Delete one of your campaigns with its checkpoints, history and memories; its characters are kept and freed (404 if it is not yours) |
 | GET | `/health` | Health check |
 
 ### Turn stream events

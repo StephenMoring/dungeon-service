@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, delete, select, update
 
 from src.models.campaign import (
     Campaign,
@@ -12,6 +12,7 @@ from src.models.campaign import (
     CreateCampaignRequest,
 )
 from src.models.character import Character
+from src.models.memory import EventMemory, ItemMemory, LocationMemory, NpcMemory
 from src.models.message_history import MessageHistory
 from src.models.user import User
 from src.services.dm_agent import create_campaign
@@ -122,3 +123,37 @@ def list_for_user(session: Session, user: User) -> list[CampaignWithDetails]:
         )
         for campaign in campaigns
     ]
+
+
+def delete_for_user(campaign_id: int, session: Session, user: User) -> None:
+    """Delete a campaign the user plays in, with its checkpoints, history and memories.
+
+    Raises LookupError if the user has no character in it (campaigns have no owner
+    column; a campaign belongs to whoever owns its character). Characters are kept and
+    freed, so the player can start a new campaign with them.
+    """
+    owned = session.exec(
+        select(Character).where(
+            Character.campaign_id == campaign_id, Character.user_id == user.id
+        )
+    ).all()
+    campaign = session.get(Campaign, campaign_id) if owned else None
+    if not campaign:
+        raise LookupError("Campaign not found")
+
+    for model in (
+        NpcMemory,
+        LocationMemory,
+        ItemMemory,
+        EventMemory,
+        MessageHistory,
+        CampaignCheckpoint,
+    ):
+        session.exec(delete(model).where(col(model.campaign_id) == campaign_id))  # type: ignore[call-overload]
+    session.exec(
+        update(Character)  # type: ignore[call-overload]
+        .where(col(Character.campaign_id) == campaign_id)
+        .values(campaign_id=None)
+    )
+    session.delete(campaign)
+    session.commit()

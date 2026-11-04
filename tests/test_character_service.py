@@ -4,9 +4,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import src.models.campaign  # noqa: F401 - ensures Campaign is registered with SQLAlchemy
 
-from src.models.character import CharacterDescriptionCreate
+from src.models.character import CharacterCreate, CharacterDescriptionCreate
 from src.services.character_service import create, create_preview
-from tests.conftest import make_character
 
 
 VALID_LLM_RESPONSE = json.dumps(
@@ -32,16 +31,28 @@ DESCRIPTION = CharacterDescriptionCreate(
 
 
 class TestCreate:
-    def test_assigns_user_and_persists(self, user):
+    def test_saves_a_new_character_for_the_user(self, user):
         session = MagicMock()
-        character = make_character(user_id=999)
+        details = CharacterCreate(
+            name="Gandalf",
+            hero_class="wizard",
+            biography="b",
+            description="d",
+            age=55,
+            strength=7,
+            luck=5,
+        )
 
-        result = create(character, session, user)
+        result = create(details, session, user)
 
-        assert result.user_id == user.id
-        session.add.assert_called_once_with(character)
+        (saved,) = session.add.call_args.args
+        assert saved is result
+        assert saved.user_id == user.id
+        assert saved.id is None
+        assert saved.campaign_id is None
+        assert (saved.name, saved.strength, saved.luck) == ("Gandalf", 7, 5)
         session.commit.assert_called_once()
-        session.refresh.assert_called_once_with(character)
+        session.refresh.assert_called_once_with(saved)
 
 
 class TestCreatePreview:

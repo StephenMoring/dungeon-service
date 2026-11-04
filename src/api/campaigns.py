@@ -9,7 +9,7 @@ from src.models.campaign import (
 from src.models.character import Character
 from src.models.user import User
 from src.api.dependencies import get_current_user
-from src.services.campaign_service import create, list_for_user
+from src.services.campaign_service import create, delete_for_user, list_for_user
 
 campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -44,3 +44,16 @@ def list_characters(
             Character.campaign_id == id, Character.user_id == user.id
         )
     ).all()
+
+
+@campaigns_router.delete("/{id}", status_code=204)
+def delete_campaign(
+    id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> None:
+    try:
+        delete_for_user(id, session, user)
+    except LookupError:
+        # 404 rather than 403, so another player's campaign ids are not confirmed.
+        raise HTTPException(status_code=404, detail="Campaign not found")

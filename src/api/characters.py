@@ -3,7 +3,13 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 from src.api.dependencies import get_current_user
 from src.db.db import get_session
-from src.models.character import Character, CharacterDescriptionCreate, HeroClass, Race
+from src.models.character import (
+    Character,
+    CharacterCreate,
+    CharacterDescriptionCreate,
+    HeroClass,
+    Race,
+)
 from src.models.message_history import MessageHistory
 from src.models.turn import TurnRequest
 from src.models.user import User
@@ -31,7 +37,7 @@ def get_characters(
 
 @character_router.post("/", status_code=201)
 def create_character(
-    character: Character,
+    character: CharacterCreate,
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):

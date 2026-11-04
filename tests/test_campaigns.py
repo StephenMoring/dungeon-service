@@ -137,3 +137,22 @@ class TestListCampaignCharacters:
         sql = compiled_sql(session.exec.call_args.args[0])
         assert "character.campaign_id = 5" in sql
         assert "character.user_id = 1" in sql
+
+
+class TestDeleteCampaign:
+    @patch("src.api.campaigns.delete_for_user")
+    def test_returns_204_and_deletes_for_the_user(self, delete, client, session, user):
+        response = client.delete("/campaigns/3")
+
+        assert response.status_code == 204
+        delete.assert_called_once_with(3, session, user)
+
+    @patch("src.api.campaigns.delete_for_user", side_effect=LookupError)
+    def test_returns_404_when_not_the_users_campaign(self, _delete, client):
+        # 404, not 403, so other players' campaign ids are not confirmed.
+        response = client.delete("/campaigns/3")
+
+        assert response.status_code == 404
+
+    def test_requires_auth(self, anon_client):
+        assert anon_client.delete("/campaigns/3").status_code in (401, 403)

@@ -46,7 +46,7 @@ uv run mypy src
 
 **Auth**: `src/api/dependencies.py:get_current_user` validates the Bearer JWT; all routes except `/health` and `/auth/*` depend on it. Character routes also check `character.user_id == user.id`.
 
-**Tenancy**: Shared tables, one tenant per user. `campaign` has no owner column: a campaign belongs to the user who owns its character, so campaign queries join `character` and filter `character.user_id`. Any new route returning user data must filter by the current user (`checkpoint`, `heroclass` and `race` are shared content).
+**Tenancy**: Shared tables, one tenant per user. `campaign` has no owner column: a campaign belongs to the user who owns its character, so campaign queries join `character` and filter `character.user_id`. Any new route returning user data must filter by the current user (`checkpoint`, `heroclass` and `race` are shared content). Request bodies must be input models (e.g. `CharacterCreate`), never table models: a table model lets the client set `id`, `user_id` or `campaign_id`, which is how a player could once join another player's campaign. `campaign_service.delete_for_user()` backs `DELETE /campaigns/{id}`: it 404s unless the user has a character in the campaign, deletes its memories, history and checkpoints, and frees its characters
 
 **Tools**: `src/tools/campaign_tools.py` - `search_checkpoints` (campaign creation). `src/tools/dice_tools.py` - `roll_check` (turns): d20 + stat vs easy 10 / medium 15 / hard 20, ties pass; `roll_d20()` is the patch point for tests
 

@@ -55,6 +55,21 @@ class TestCreateCharacter:
         assert mock_create.call_args.args[2] is user
 
     @patch("src.api.characters.create")
+    def test_ignores_ownership_fields_in_the_body(self, mock_create, client):
+        # A client must not pick its character's id, owner or campaign: setting
+        # campaign_id let a player join (and read) another player's campaign.
+        mock_create.return_value = make_character()
+        body = {**CHARACTER_BODY, "id": 5, "user_id": 999, "campaign_id": 1}
+
+        client.post("/characters/", json=body)
+
+        sent = mock_create.call_args.args[0].model_dump()
+        assert "id" not in sent
+        assert "user_id" not in sent
+        assert "campaign_id" not in sent
+        assert sent["strength"] == 7
+
+    @patch("src.api.characters.create")
     def test_returns_502_when_service_fails(self, mock_create, client):
         mock_create.side_effect = ValueError("save failed")
 

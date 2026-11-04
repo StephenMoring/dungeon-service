@@ -12,7 +12,16 @@ class CharacterBase(SQLModel):
 
 
 class CharacterCreate(CharacterBase):
-    pass
+    """What a player may set when saving a character. No id, user_id or campaign_id:
+    the server assigns the owner, and only campaign creation puts a character in one."""
+
+    strength: int | None = None
+    perception: int | None = None
+    endurance: int | None = None
+    charisma: int | None = None
+    intelligence: int | None = None
+    agility: int | None = None
+    luck: int | None = None
 
 
 class CharacterDescriptionCreate(SQLModel):

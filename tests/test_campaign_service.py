@@ -6,8 +6,8 @@ import src.models.campaign  # noqa: F401 - ensures Campaign is registered with S
 
 from src.models.campaign import Campaign, CampaignCheckpoint, CreateCampaignRequest
 from src.models.message_history import MessageHistory
-from src.services.campaign_service import create
-from tests.conftest import make_character
+from src.services.campaign_service import create, delete_for_user
+from tests.conftest import compiled_sql, make_character
 
 
 VALID_LLM_RESPONSE = json.dumps(
@@ -137,3 +137,52 @@ class TestCampaignServiceCreate:
             create(REQUEST, session, user)
 
         session.add.assert_not_called()
+
+
+class TestDeleteForUser:
+    def owned(self, *characters):
+        session = MagicMock()
+        session.exec.return_value.all.return_value = list(characters)
+        session.get.return_value = Campaign(id=3, name="n", theme="t", description="d")
+        return session
+
+    def test_refuses_a_campaign_the_user_has_no_character_in(self, user):
+        session = self.owned()
+
+        with pytest.raises(LookupError):
+            delete_for_user(3, session, user)
+
+        ownership = compiled_sql(session.exec.call_args.args[0])
+        assert "character.campaign_id = 3" in ownership
+        assert "character.user_id = 1" in ownership
+        session.delete.assert_not_called()
+        session.commit.assert_not_called()
+
+    def test_deletes_the_campaign_and_everything_in_it(self, user):
+        session = self.owned(make_character(campaign_id=3))
+
+        delete_for_user(3, session, user)
+
+        statements = [compiled_sql(c.args[0]) for c in session.exec.call_args_list[1:]]
+        for table in (
+            "npcmemory",
+            "locationmemory",
+            "itemmemory",
+            "eventmemory",
+            "messagehistory",
+            "campaigncheckpoint",
+        ):
+            assert f"DELETE FROM {table} WHERE {table}.campaign_id = 3" in statements
+        session.delete.assert_called_once_with(session.get.return_value)
+        session.commit.assert_called_once()
+
+    def test_keeps_characters_but_frees_them(self, user):
+        session = self.owned(make_character(campaign_id=3))
+
+        delete_for_user(3, session, user)
+
+        statements = [compiled_sql(c.args[0]) for c in session.exec.call_args_list[1:]]
+        assert (
+            "UPDATE character SET campaign_id=NULL WHERE character.campaign_id = 3"
+            in statements
+        )
