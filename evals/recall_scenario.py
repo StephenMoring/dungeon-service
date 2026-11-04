@@ -35,6 +35,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import voyageai
 from sqlmodel import Session, col, delete
 
 from src.db.db import engine
@@ -63,13 +64,21 @@ def throttle_voyage(per_minute: float) -> None:
 
     def spaced(fn):
         def call(*args, **kwargs):
-            wait = last[0] + gap - time.monotonic()
-            if wait > 0:
-                time.sleep(wait)
-            try:
-                return fn(*args, **kwargs)
-            finally:
-                last[0] = time.monotonic()
+            for attempt in range(4):
+                wait = last[0] + gap - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
+                try:
+                    return fn(*args, **kwargs)
+                except voyageai.error.RateLimitError:
+                    # The limit counts recent calls, including ones from before this
+                    # run; wait out the window instead of failing the scenario.
+                    if attempt == 3:
+                        raise
+                    print("  Voyage rate limit hit; waiting a minute", flush=True)
+                    time.sleep(60)
+                finally:
+                    last[0] = time.monotonic()
 
         return call
 
