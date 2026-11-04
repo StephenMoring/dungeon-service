@@ -150,3 +150,15 @@ def test_extraction_prompt_without_recalled_memories():
 def test_known_context_is_blank_without_memories():
     assert known_context(None) == ""
     assert known_context(RetrievedMemories()) == ""
+
+
+def test_memories_tell_the_dm_to_show_what_the_player_knows():
+    memories = RetrievedMemories(
+        npcs=[NpcMemory(campaign_id=1, name="Aldo Venn", secrets="Lied about the docks")]
+    )
+
+    section = format_memories(memories)
+
+    # A repeated lie must not read as unchallenged, but the player decides what to do.
+    assert "repeats a claim the player has evidence against" in section
+    assert "never decide for the player" in section

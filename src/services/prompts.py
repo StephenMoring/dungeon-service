@@ -162,6 +162,10 @@ def format_memories(memories: "RetrievedMemories") -> str:
         "Facts from earlier in this campaign that the player has already seen or learned. "
         "Stay consistent with them. Characters keep their secrets and may lie, but the player "
         "knows what is listed here, so their lies can be caught.\n\n"
+        "When a character repeats a claim the player has evidence against, the narration must "
+        "not treat it as unchallenged: in a sentence, let the player's character notice the "
+        "contradiction or recall the evidence they hold (name it). The character can keep "
+        "lying, and never decide for the player whether to confront them.\n\n"
         + _memory_sections(memories)
         + "\n"
     )
