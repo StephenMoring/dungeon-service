@@ -23,7 +23,7 @@ from src.db.db import engine
 from src.models.campaign import Campaign
 from src.models.memory import EventMemory, ItemMemory, LocationMemory, NpcMemory
 from src.services import memory_service
-from src.services.embedding_service import Memory, embed, embed_query, memory_text
+from src.services.embedding_service import Memory, embed, embed_queries, memory_text
 
 HERE = Path(__file__).parent
 CASES = HERE / "retrieval_cases.json"
@@ -67,14 +67,17 @@ def ranked(
     return [(memory, float(d)) for memory, d in rows]
 
 
-def run_probe(session: Session, campaign_id: int, probe: dict, keys: dict) -> dict:
-    # The same query a real turn builds in turn_service._recall.
-    query = (
-        f"{probe['last_dm']}\n\n{probe['message']}"
-        if probe.get("last_dm")
-        else probe["message"]
-    )
-    vector = embed_query(query)
+def probe_query(probe: dict) -> str:
+    """The same query a real turn builds in turn_service._recall."""
+    if probe.get("last_dm"):
+        return f"{probe['last_dm']}\n\n{probe['message']}"
+    return probe["message"]
+
+
+def run_probe(
+    session: Session, campaign_id: int, probe: dict, vector: list[float], keys: dict
+) -> dict:
+    query = probe_query(probe)
 
     recalled: list[str] = []
     nearest: dict[str, list[dict]] = {}
@@ -110,6 +113,7 @@ def run_probe(session: Session, campaign_id: int, probe: dict, keys: dict) -> di
 
 
 def main() -> None:
+    engine.echo = False  # the app logs every SQL statement locally; too noisy here
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--k", type=int, default=memory_service.MEMORIES_PER_KIND)
     parser.add_argument(
@@ -129,9 +133,11 @@ def main() -> None:
             session.flush()
             assert campaign.id is not None
             keys = load_memories(session, campaign.id, cases["memories"])
+            # One request for all probes keeps a run to two Voyage calls.
+            vectors = embed_queries([probe_query(p) for p in cases["probes"]])
             results = [
-                run_probe(session, campaign.id, probe, keys)
-                for probe in cases["probes"]
+                run_probe(session, campaign.id, probe, vector, keys)
+                for probe, vector in zip(cases["probes"], vectors, strict=True)
             ]
         finally:
             session.rollback()

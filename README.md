@@ -115,6 +115,8 @@ uv run mypy src
 
 Unit tests mock Claude and Voyage. Evals call them for real and measure how well campaign memory works, so they cost money and their results vary between runs. Run them when you change something they measure (the extraction or DM prompt, `MEMORIES_PER_KIND` / `MAX_COSINE_DISTANCE`, the embedding text, or a model), and compare against an earlier run. Each writes its inputs, what was retrieved, outputs and scores to `evals/results/` (git-ignored).
 
+A Voyage account with no payment method is limited to 3 requests a minute. The retrieval eval makes two requests per run; for the recall scenario pass `--voyage-rpm 3` (about 15 minutes), or a rate-limited lookup is skipped and scores as the DM forgetting.
+
 | Eval | What it measures | Needs | Cost |
 | --- | --- | --- | --- |
 | `uv run python -m evals.retrieval` | Whether player turns recall the memories they should from a fixed set (`evals/retrieval_cases.json`), with rank and cosine distance. `--k` / `--max-distance` try other limits. Runs in a rolled-back transaction | DB, Voyage | Fractions of a cent |

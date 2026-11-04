@@ -18,9 +18,14 @@ def embed(texts: list[str]) -> list[list[float]]:
 
 def embed_query(text: str) -> list[float]:
     """Embed search text. Voyage tunes `query` embeddings to match stored `document` ones."""
+    return embed_queries([text])[0]
+
+
+def embed_queries(texts: list[str]) -> list[list[float]]:
+    """Embed several search texts in one request (evals batch their probes this way)."""
     vo = voyageai.Client()  # type: ignore
-    result = vo.embed([text], model="voyage-3.5", input_type="query")
-    return cast(list[float], result.embeddings[0])
+    result = vo.embed(texts, model="voyage-3.5", input_type="query")
+    return cast(list[list[float]], result.embeddings)
 
 
 type Memory = NpcMemory | LocationMemory | ItemMemory | EventMemory

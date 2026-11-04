@@ -15,11 +15,13 @@ default 25 filler exchanges and 5 probes makes about 40 Claude calls.
 
     uv run python -m evals.recall_scenario
     uv run python -m evals.recall_scenario --filler 10 --probes 3 --keep
+    uv run python -m evals.recall_scenario --voyage-rpm 3   # Voyage free-tier limit
 """
 
 import argparse
 import asyncio
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -31,6 +33,7 @@ from src.models.character import Character
 from src.models.memory import EventMemory, ItemMemory, LocationMemory, NpcMemory
 from src.models.message_history import MessageHistory
 from src.models.user import User
+from src.services import embedding_service
 from src.services.dm_agent import TextDelta, client, process_turn_stream
 from src.services.embedding_service import extract_and_store_memories
 from src.services.prompts import format_memories
@@ -40,6 +43,29 @@ HERE = Path(__file__).parent
 SCENARIO = HERE / "recall_scenario.json"
 RESULTS = HERE / "results"
 JUDGE_MODEL = "claude-sonnet-4-5-20250929"
+
+
+def throttle_voyage(per_minute: float) -> None:
+    """Wait between Voyage calls. A rate-limited lookup during a probe is logged and
+    skipped by the app, which would score as the DM forgetting."""
+    gap = 60 / per_minute + 1
+    last = [0.0]
+
+    def spaced(fn):
+        def call(*args, **kwargs):
+            wait = last[0] + gap - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                last[0] = time.monotonic()
+
+        return call
+
+    # embed_query (used by retrieval) calls embed_queries through this module.
+    embedding_service.embed = spaced(embedding_service.embed)
+    embedding_service.embed_queries = spaced(embedding_service.embed_queries)
 
 
 def create_world(session: Session, scenario: dict) -> Character:
@@ -151,6 +177,7 @@ def clean_up(campaign_id: int, user_id: int) -> None:
 
 
 def main() -> None:
+    engine.echo = False  # the app logs every SQL statement locally; too noisy here
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--filler", type=int, help="filler exchanges to play (default: all)"
@@ -159,7 +186,15 @@ def main() -> None:
     parser.add_argument(
         "--keep", action="store_true", help="leave the eval campaign in the db"
     )
+    parser.add_argument(
+        "--voyage-rpm",
+        type=float,
+        help="space Voyage calls to this many per minute (3 on a Voyage account "
+        "with no payment method), so no lookup is silently skipped",
+    )
     args = parser.parse_args()
+    if args.voyage_rpm:
+        throttle_voyage(args.voyage_rpm)
 
     scenario = json.loads(SCENARIO.read_text())
     filler = scenario["filler"][: args.filler] if args.filler else scenario["filler"]
