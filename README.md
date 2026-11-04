@@ -6,7 +6,7 @@ The frontend is the sibling repo `../dungeon-web`. Its Vite dev server (`http://
 
 ## Features
 
-- **Discord sign-in**: The frontend sends the OAuth code to `/auth/discord/callback`. The service exchanges it with Discord, creates or updates the user, and returns a 30-day JWT. Every other route (except `/health`) requires that JWT.
+- **Discord sign-in and sessions**: The frontend sends the OAuth code to `/auth/discord/callback`. The service exchanges it with Discord, creates or updates the user, and sets a 7-day session JWT as an httpOnly, Secure, `SameSite=Lax` cookie (`dungeon_session`), so page JavaScript never sees the token. Every route except `/health` and the sign-in callback needs that cookie, and the user is always read from it: request bodies never choose an owner. Logging out bumps the user's `token_version`, which ends every copy of the token. Requests that change data (POST/PUT/PATCH/DELETE) must also send `X-Requested-With: dungeon-web`, which other sites cannot add to a forged cross-site request.
 - **Characters**: The player gives a name, class, race and free-text description. Claude returns a character sheet with age, biography and 7 stats on a 1–10 scale (strength, perception, endurance, charisma, intelligence, agility, luck), using structured output. The player previews it, then saves it.
 - **Campaigns**: The player picks a character and describes the campaign they want. Claude classifies the request into tags, calls the `search_checkpoints` tool to pull matching pre-authored scenarios, and returns a campaign with an ordered list of checkpoints and an opening message. The first checkpoint is active and the rest are locked. The character joins the campaign, and the opening message starts its history.
 - **Streaming turns**: Each player message goes to Claude with the campaign, character sheet, active checkpoint, relevant campaign memories and the last 10 messages. The reply streams back as Server-Sent Events (`thinking`, `roll`, `text`, `done`, `error`). Both sides of the exchange are saved when the stream finishes; nothing is saved if it fails.
@@ -47,11 +47,13 @@ evals/          memory evals against real Claude/Voyage (see Evals); results/ is
 
 ## API
 
-All routes except `/health` and `/auth/*` need a `Bearer` JWT. Routes only return the signed-in user's data.
+All routes except `/health` and `/auth/discord/callback` need the `dungeon_session` cookie (`Authorization: Bearer` is not accepted). Data-changing requests also need `X-Requested-With: dungeon-web`, or they get a 403. Routes only return the signed-in user's data.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/auth/discord/callback` | Exchange a Discord OAuth code for a JWT |
+| POST | `/auth/discord/callback` | Exchange a Discord OAuth code; sets the session cookie and returns the user |
+| GET | `/auth/me` | The signed-in user (`id`, `username`, `avatar_url`) |
+| POST | `/auth/logout` | End every session for the user and clear the cookie |
 | GET | `/characters/` | Your characters, each with its campaign |
 | POST | `/characters/` | Save a character (name, class, biography, description, age, stats; the server sets the owner, and only campaign creation puts a character in a campaign) |
 | POST | `/characters/preview` | Generate a character sheet without saving |
@@ -92,7 +94,7 @@ DISCORD_REDIRECT_URI=
 SECRET_KEY=
 ```
 
-All of these are required; the app fails at startup if any is missing. The Claude key is named `DUNGEON_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`, so it doesn't clash with Claude Code, which reads that name itself. Use a `SECRET_KEY` of at least 32 bytes.
+All of these are required; the app fails at startup if any is missing. Optional: `COOKIE_SECURE=false` drops the cookie's Secure flag (not needed for `http://localhost`, which browsers treat as secure). If the frontend is ever served from a different site than the API, the cookie and CORS settings must change (today the frontend proxies `/api` so both are same-origin). The Claude key is named `DUNGEON_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`, so it doesn't clash with Claude Code, which reads that name itself. Use a `SECRET_KEY` of at least 32 bytes.
 
 Then:
 

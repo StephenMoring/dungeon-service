@@ -51,7 +51,7 @@ flowchart TB
 
   player -- "Uses<br/>[HTTPS]" --> web
   web -. "OAuth authorize redirect" .-> discord
-  web -- "JSON + SSE, Bearer JWT<br/>[HTTPS]" --> api
+  web -- "JSON + SSE, httpOnly session cookie<br/>+ X-Requested-With on writes [HTTPS]" --> api
   api -- "Reads/writes<br/>[psycopg2]" --> db
   flyway -- "Migrates<br/>[JDBC]" --> db
   api -- "Token exchange + /users/@me" --> discord
@@ -82,11 +82,11 @@ flowchart LR
   subgraph svc["dungeon-service [Container]"]
     direction LR
     authR["<b>auth router</b><br/>POST /auth/discord/callback"]
-    charR["<b>characters router</b><br/>CRUD, preview, lookups,<br/>turn stream (SSE)<br/><i>JWT via get_current_user</i>"]
-    campR["<b>campaigns router</b><br/>Create + list, scoped<br/>to the current user<br/><i>JWT via get_current_user</i>"]
+    charR["<b>characters router</b><br/>CRUD, preview, lookups,<br/>turn stream (SSE)<br/><i>session cookie via get_current_user</i>"]
+    campR["<b>campaigns router</b><br/>Create, list, delete, scoped<br/>to the current user<br/><i>session cookie via get_current_user</i>"]
     subgraph services["Services · src/services"]
       direction TB
-      authS["<b>auth_service</b><br/>Discord user upsert, JWT"]
+      authS["<b>auth_service</b><br/>Discord user upsert,<br/>session JWT (token_version)"]
       charS["<b>character_service</b><br/>Preview + persistence"]
       turnS["<b>turn_service</b><br/>Context, SSE events,<br/>saves messages"]
       embS["<b>embedding_service</b><br/>Background: extract,<br/>embed, upsert memories"]

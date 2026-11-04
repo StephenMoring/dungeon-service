@@ -5,10 +5,16 @@ from src.config import SECRET_KEY
 from src.models.user import User
 
 
-def create_jwt(user_id: int) -> str:
+SESSION_COOKIE = "dungeon_session"
+SESSION_DAYS = 7
+
+
+def create_jwt(user: User) -> str:
+    """A session token for `user`, sent to the browser only as an httpOnly cookie."""
     payload = {
-        "sub": str(user_id),
-        "exp": datetime.now(timezone.utc) + timedelta(days=30),
+        "sub": str(user.id),
+        "ver": user.token_version,
+        "exp": datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
@@ -30,4 +36,23 @@ def add_user(discord_user: dict, session: Session):
 
 
 def validate_jwt(token: str) -> dict:
-    return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    return jwt.decode(
+        token, SECRET_KEY, algorithms=["HS256"], options={"require": ["exp", "sub"]}
+    )
+
+
+def user_for_token(token: str, session: Session) -> User:
+    """The user a session token belongs to. Raises ValueError with a reason if the
+    token is invalid, expired, for an unknown user, or from before a logout."""
+    try:
+        payload = validate_jwt(token)
+    except jwt.ExpiredSignatureError:
+        raise ValueError("Session expired")
+    except jwt.InvalidTokenError:
+        raise ValueError("Invalid session")
+    user = session.get(User, int(payload["sub"]))
+    if not user:
+        raise ValueError("Invalid session")
+    if payload.get("ver") != user.token_version:
+        raise ValueError("Session ended")
+    return user

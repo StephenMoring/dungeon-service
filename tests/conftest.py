@@ -24,6 +24,10 @@ def no_memory_lookup():
         yield
 
 
+# Sent by dungeon-web on every request; the API refuses writes without it (CSRF).
+FRONTEND_HEADERS = {"X-Requested-With": "dungeon-web"}
+
+
 @pytest.fixture
 def user() -> User:
     return User(id=1, discord_id="1234", username="tester", avatar_url="")
@@ -39,7 +43,7 @@ def client(user, session):
     """TestClient authenticated as `user`, with a mocked DB session."""
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[get_session] = lambda: session
-    yield TestClient(app)
+    yield TestClient(app, headers=FRONTEND_HEADERS)
     app.dependency_overrides.clear()
 
 
@@ -47,7 +51,7 @@ def client(user, session):
 def anon_client(session):
     """TestClient with real auth (no user override) and a mocked DB session."""
     app.dependency_overrides[get_session] = lambda: session
-    yield TestClient(app)
+    yield TestClient(app, headers=FRONTEND_HEADERS)
     app.dependency_overrides.clear()
 
 
