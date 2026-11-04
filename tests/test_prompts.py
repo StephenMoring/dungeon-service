@@ -162,3 +162,6 @@ def test_memories_tell_the_dm_to_show_what_the_player_knows():
     # A repeated lie must not read as unchallenged, but the player decides what to do.
     assert "repeats a claim the player has evidence against" in section
     assert "never decide for the player" in section
+    # Also a lie just told in the scene, or told to someone else while the player listens.
+    assert "in the scene you just narrated" in section
+    assert "to someone else" in section
