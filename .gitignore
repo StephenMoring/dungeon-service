@@ -22,3 +22,6 @@ wheels/
 docs/plans/
 docs/superpowers/
 .claude/settings.local.json
+
+# Eval run output (inputs, retrieved memories, scores)
+evals/results/

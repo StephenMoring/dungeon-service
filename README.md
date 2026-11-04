@@ -42,6 +42,7 @@ db/
 infra/local/    docker-compose (postgres, flyway, app)
 tests/          pytest suite; mocks Claude, Voyage and the DB
 docs/           architecture.md (committed); plans/ and superpowers/ are local-only
+evals/          memory evals against real Claude/Voyage (see Evals); results/ is git-ignored
 ```
 
 ## API
@@ -109,6 +110,16 @@ uv run pytest                              # no DB or API keys used; .env must e
 uv run ruff check . && uv run ruff format .
 uv run mypy src
 ```
+
+## Evals
+
+Unit tests mock Claude and Voyage. Evals call them for real and measure how well campaign memory works, so they cost money and their results vary between runs. Run them when you change something they measure (the extraction or DM prompt, `MEMORIES_PER_KIND` / `MAX_COSINE_DISTANCE`, the embedding text, or a model), and compare against an earlier run. Each writes its inputs, what was retrieved, outputs and scores to `evals/results/` (git-ignored).
+
+| Eval | What it measures | Needs | Cost |
+| --- | --- | --- | --- |
+| `uv run python -m evals.retrieval` | Whether player turns recall the memories they should from a fixed set (`evals/retrieval_cases.json`), with rank and cosine distance. `--k` / `--max-distance` try other limits. Runs in a rolled-back transaction | DB, Voyage | Fractions of a cent |
+| `uv run python -m evals.extraction` | Whether Claude stores the right facts from scripted exchanges (`evals/extraction_cases.json`), as a pass rate per check over `--runs` | Claude | One call per case per run |
+| `uv run python -m evals.recall_scenario` | End to end: plant a clue (a letter proving an NPC lied), play 25 filler exchanges through real extraction, then probe 5 times. Reports whether the clue reached the DM's prompt, whether the reply mentions it, and whether a Claude grader says the DM used it (`evals/recall_scenario.json`). Creates and deletes its own campaign (`--keep` to inspect it) | DB, Claude, Voyage | About 40 calls |
 
 ## Roadmap
 

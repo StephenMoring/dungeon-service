@@ -1,0 +1,229 @@
+{
+  "about": "One campaign's memories, written as extraction would store them, plus player turns that should recall specific ones. The thread under test: Aldo the steward claims he was at the docks the night of the warehouse fire; a letter from his desk proves he was at the warehouse. Aldo's record is long on purpose, as it would be after many mentions, so the eval also shows whether one vector per NPC dilutes.",
+  "memories": [
+    {
+      "key": "npc:aldo",
+      "kind": "npc",
+      "name": "Aldo Venn",
+      "role": "steward of House Ashford",
+      "disposition": "polite, evasive",
+      "known_facts": "Keeps the household ledgers, Pours wine for guests in the great hall, Has served the Ashfords for twenty years, Claims he was at the docks the night of the warehouse fire, Grows rosemary in the kitchen garden, Owes money to Captain Voss, Speaks fondly of the late Lady Ashford, Walks with a slight limp, Keeps the key to the study on his belt, Asked the player to stay for the harvest feast",
+      "secrets": "Lied about being at the docks the night of the fire; the letter from his desk places him at the warehouse"
+    },
+    {
+      "key": "npc:mira",
+      "kind": "npc",
+      "name": "Mira",
+      "role": "innkeeper of the Rusty Flagon",
+      "disposition": "friendly",
+      "known_facts": "Lost her son to the river fever, Gives the player free lodging, Hears every rumour in Ashford"
+    },
+    {
+      "key": "npc:voss",
+      "kind": "npc",
+      "name": "Captain Voss",
+      "role": "captain of the town watch",
+      "disposition": "gruff, transactional",
+      "known_facts": "Agreed to look the other way at the warehouse in exchange for the player finding the arsonist, Lends money at high interest"
+    },
+    {
+      "key": "npc:hesk",
+      "kind": "npc",
+      "name": "Old Hesk",
+      "role": "ferryman at the docks",
+      "disposition": "sleepy, honest",
+      "known_facts": "Runs the night ferry across the river, Knows the tides better than anyone, Was at the docks all night during the fire and saw no one from the manor"
+    },
+    {
+      "key": "npc:tamsin",
+      "kind": "npc",
+      "name": "Brother Tamsin",
+      "role": "priest of the river chapel",
+      "disposition": "kind, nervous",
+      "known_facts": "Tends the sick in the chapel, Keeps a register of births and deaths"
+    },
+    {
+      "key": "loc:warehouse",
+      "kind": "location",
+      "name": "The Ashford Warehouse",
+      "description": "A burned-out grain warehouse on the east bank, roof collapsed",
+      "events": "The fire started here three nights ago, The player found bootprints in the ash matching a steward's buckled shoes"
+    },
+    {
+      "key": "loc:docks",
+      "kind": "location",
+      "name": "The Docks",
+      "description": "Rotting piers where the night ferry ties up",
+      "events": "Old Hesk said nobody from the manor came to the docks the night of the fire"
+    },
+    {
+      "key": "loc:flagon",
+      "kind": "location",
+      "name": "The Rusty Flagon",
+      "description": "A smoky inn on the market square",
+      "events": "The player took a room here, Overheard sailors joking about the fire"
+    },
+    {
+      "key": "loc:study",
+      "kind": "location",
+      "name": "Aldo's Study",
+      "description": "A cramped room off the great hall, full of ledgers",
+      "events": "The player picked the desk lock and searched it while Aldo was at the feast"
+    },
+    {
+      "key": "loc:chapel",
+      "kind": "location",
+      "name": "The River Chapel",
+      "description": "A small stone chapel by the water, full of the sick",
+      "events": "Brother Tamsin let the player read the parish register"
+    },
+    {
+      "key": "item:letter",
+      "kind": "item",
+      "name": "Aldo's Letter",
+      "description": "An unsent letter in Aldo's hand: 'It is done. The warehouse burned as you asked. Meet me at the east bank.' Dated the night of the fire",
+      "where_found": "Locked drawer of the desk in Aldo's study",
+      "status": "held"
+    },
+    {
+      "key": "item:ledger",
+      "kind": "item",
+      "name": "Household Ledger",
+      "description": "The Ashford accounts, with a large payment to an unnamed party a week before the fire",
+      "where_found": "Aldo's Study",
+      "status": "held"
+    },
+    {
+      "key": "item:key",
+      "kind": "item",
+      "name": "Brass Key",
+      "description": "A small brass key with a river-reed pattern",
+      "where_found": "Under a loose board at the Rusty Flagon",
+      "status": "held"
+    },
+    {
+      "key": "item:dagger",
+      "kind": "item",
+      "name": "Silver Dagger",
+      "description": "A fine dagger with the Ashford crest",
+      "where_found": "Given by Lady Ashford's portrait keeper",
+      "status": "held"
+    },
+    {
+      "key": "event:found_letter",
+      "kind": "event",
+      "summary": "Found Aldo's unsent letter in his locked desk, proving he was at the warehouse the night it burned",
+      "category": "revelation"
+    },
+    {
+      "key": "event:caught_lie",
+      "kind": "event",
+      "summary": "Realised Aldo lied about being at the docks; Old Hesk saw no one from the manor there",
+      "category": "revelation"
+    },
+    {
+      "key": "event:deal_voss",
+      "kind": "event",
+      "summary": "Struck a deal with Captain Voss: he ignores the break-in at the warehouse if the player finds the arsonist",
+      "category": "deal"
+    },
+    {
+      "key": "event:room",
+      "kind": "event",
+      "summary": "Took a room at the Rusty Flagon for the week",
+      "category": "decision"
+    },
+    {
+      "key": "event:feast",
+      "kind": "event",
+      "summary": "Accepted Aldo's invitation to the harvest feast",
+      "category": "decision"
+    },
+    {
+      "key": "event:register",
+      "kind": "event",
+      "summary": "Read the parish register and learned Lady Ashford had a second child",
+      "category": "revelation"
+    },
+    {
+      "key": "event:fever",
+      "kind": "event",
+      "summary": "Helped Brother Tamsin carry the sick into the chapel",
+      "category": "consequence"
+    },
+    {
+      "key": "event:sailors",
+      "kind": "event",
+      "summary": "Bought the sailors a round and heard the fire was no accident",
+      "category": "consequence"
+    }
+  ],
+  "probes": [
+    {
+      "id": "confront-by-name",
+      "last_dm": "Aldo looks up from the ledgers and smiles. 'Back so soon?'",
+      "message": "I slam the letter on the table. You told me you were at the docks.",
+      "expect": ["npc:aldo", "item:letter"]
+    },
+    {
+      "id": "confront-without-name",
+      "last_dm": "The steward avoids your eyes and straightens his cuffs.",
+      "message": "Where were you the night of the fire?",
+      "expect": ["npc:aldo"]
+    },
+    {
+      "id": "pronoun-after-dm-names-him",
+      "last_dm": "Aldo pours you a cup of wine and asks how you are finding Ashford.",
+      "message": "I ask him casually what he knows about the warehouse.",
+      "expect": ["npc:aldo", "loc:warehouse"]
+    },
+    {
+      "id": "recall-the-evidence",
+      "last_dm": "The magistrate's clerk asks what proof you have.",
+      "message": "I hand over what I took from the desk.",
+      "expect": ["item:letter"]
+    },
+    {
+      "id": "recall-the-lie",
+      "last_dm": "Mira asks if you have learned anything about the fire.",
+      "message": "I tell her someone at the manor has been lying to me.",
+      "expect": ["event:caught_lie"]
+    },
+    {
+      "id": "return-to-fire",
+      "last_dm": "Dawn breaks over the river.",
+      "message": "I go back to where the fire started and look around again.",
+      "expect": ["loc:warehouse"]
+    },
+    {
+      "id": "magistrate-hearing",
+      "last_dm": "A messenger says the magistrate will hear the case of the warehouse fire tomorrow at noon.",
+      "message": "I gather my evidence and think about who to accuse.",
+      "expect": ["item:letter", "event:found_letter"]
+    },
+    {
+      "id": "the-deal",
+      "last_dm": "Captain Voss blocks the alley. 'You owe me a name.'",
+      "message": "I remind him of our bargain.",
+      "expect": ["npc:voss", "event:deal_voss"]
+    },
+    {
+      "id": "distractor-ferryman",
+      "last_dm": "The night ferry bumps against the pier.",
+      "message": "I ask the ferryman about the tides.",
+      "expect": ["npc:hesk"]
+    },
+    {
+      "id": "distractor-ledger",
+      "last_dm": "You sit by the fire at the Rusty Flagon.",
+      "message": "I read through the household accounts again, looking for the payment.",
+      "expect": ["item:ledger"]
+    },
+    {
+      "id": "unrelated-small-talk",
+      "last_dm": "Mira sets down a bowl of stew.",
+      "message": "I thank her and eat.",
+      "expect": []
+    }
+  ]
+}

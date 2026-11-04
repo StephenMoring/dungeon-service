@@ -39,7 +39,7 @@ uv run mypy src
 - `prompts.py` - Prompt strings and `build_turn_system_prompt()` (campaign + character + checkpoint context)
 - `turn_service.py` - `load_turn_context()` loads character → campaign → active checkpoint → last 10 messages; `stream_turn()` turns `process_turn_stream` output into SSE events (`thinking`, `roll`, `text`, `done`, `error`), then `save_turn()` persists both messages with its own `Session(engine)` and schedules memory extraction. Nothing is saved on error
 - `memory_service.py` - `retrieve_memories(campaign_id, query_text, session)`: embeds the query (`embed_query`, Voyage `input_type="query"`) and runs a pgvector cosine search (`<=>`) per memory table, scoped to the campaign, capped at `MEMORIES_PER_KIND` (3) and `MAX_COSINE_DISTANCE` (0.6). `turn_service.load_turn_context()` calls it with the last DM reply + player message; failures are logged and the turn continues with no memories. `prompts.format_memories()` renders the "What You Remember" section
-- `embedding_service.py` - `extract_and_store_memories()` runs as a FastAPI BackgroundTask after each turn: extracts NPC/location/item/event memories, embeds with Voyage `voyage-3.5` (1024 dims), upserts by name per campaign
+- `embedding_service.py` - `extract_and_store_memories()` runs as a FastAPI BackgroundTask after each turn: extracts NPC/location/item/event memories, upserts by name per campaign (appending facts/secrets/events to a known record), then embeds every stored or merged record with Voyage `voyage-3.5` (1024 dims) from `memory_text()`. Embed after merging, never before, or a known NPC's vector covers only the latest mention
 - `campaign_service.py` - Verifies the requesting user owns `character_id`, calls `create_campaign`, persists the campaign + ordered checkpoints (first `new`, rest `locked`), assigns the character to it, and saves the opening message as the first assistant `messagehistory` row. `list_for_user()` backs `GET /campaigns/`: the user's campaigns, each with only that user's characters and its `campaigncheckpoint` rows ordered by `order`
 - `character_service.py` - `create_preview()` generates a sheet via dm_agent without saving; `create()` saves a client-submitted character for the current user
 - `auth_service.py` - Discord user upsert, JWT create/validate (`SECRET_KEY`)
@@ -62,6 +62,7 @@ uv run mypy src
 - Async tests use `@pytest.mark.anyio` (anyio's pytest plugin ships with FastAPI). `tests/helpers.py:FakeStream` stands in for `async_client.messages.stream`
 - `conftest.py` has an autouse `no_memory_lookup` fixture that stubs `src.services.turn_service.retrieve_memories` (empty), so tests never call Voyage. Patch it again in a test to exercise retrieval
 - `src/config` raises at import if env vars are missing, so `.env` must exist to run tests
+- `evals/` is separate from the test suite: scripts that call real Claude/Voyage to measure memory (retrieval, extraction, end-to-end recall). See README "Evals". Run them before and after changing memory prompts, limits or embedding text; add a case when play turns up a memory failure
 
 ## Tech Stack
 
