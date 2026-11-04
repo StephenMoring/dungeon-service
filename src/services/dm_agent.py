@@ -1,8 +1,8 @@
-import os
 from dataclasses import dataclass
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types import MessageParam, TextBlock, ToolUseBlock
 from typing import AsyncGenerator, cast
+from src.config import ANTHROPIC_API_KEY
 from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
 from src.tools.dice_tools import RollResult, handle_roll_check, roll_check_tool
 from src.services.prompts import (
@@ -12,8 +12,8 @@ from src.services.prompts import (
     memory_extraction_prompt,
 )
 
-client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-async_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+client = Anthropic(api_key=ANTHROPIC_API_KEY)
+async_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
 
 CHARACTER_SCHEMA = {

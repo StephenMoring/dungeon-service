@@ -79,7 +79,7 @@ event: error      data: {"detail": "..."}        (ends the stream; nothing saved
 Create `.env`:
 
 ```
-ANTHROPIC_API_KEY=
+DUNGEON_ANTHROPIC_API_KEY=
 VOYAGE_API_KEY=
 DATABASE_URL=postgresql://<user>:<pass>@localhost:5432/dungeon_pg_db
 POSTGRES_USER=
@@ -90,7 +90,7 @@ DISCORD_REDIRECT_URI=
 SECRET_KEY=
 ```
 
-All of these are required; the app fails at startup if any is missing. Use a `SECRET_KEY` of at least 32 bytes.
+All of these are required; the app fails at startup if any is missing. The Claude key is named `DUNGEON_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`, so it doesn't clash with Claude Code, which reads that name itself. Use a `SECRET_KEY` of at least 32 bytes.
 
 Then:
 

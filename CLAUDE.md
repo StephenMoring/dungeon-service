@@ -71,7 +71,7 @@ uv run mypy src
 
 ## Environment Variables
 
-All required (loaded in `src/config/config.py`, which raises at import if any are missing): `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `DATABASE_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `SECRET_KEY`. docker-compose also needs `POSTGRES_USER` / `POSTGRES_PASSWORD`.
+All required (loaded in `src/config/config.py`, which raises at import if any are missing): `DUNGEON_ANTHROPIC_API_KEY` (the Claude API key; deliberately not `ANTHROPIC_API_KEY`, which Claude Code itself reads), `VOYAGE_API_KEY`, `DATABASE_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `SECRET_KEY`. docker-compose also needs `POSTGRES_USER` / `POSTGRES_PASSWORD`.
 
 ## Gotchas
 
