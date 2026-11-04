@@ -1,0 +1,12 @@
+{
+  "about": "Control for ashford_liar: the same campaign, with Aldo's lie and the letter in memory, but the probe is Old Hesk, who has been honest throughout, repeating his true account. Since the DM was told to point out repeated lies, this checks it does not grow suspicious of everyone: it should treat Hesk's account as credible and not drag the letter or Aldo's lie into his scene uninvited. `mention_expected` is false: a reply that brings up the letter or the warehouse is flagged.",
+  "base": "ashford_liar",
+  "lead_in": "I walk down to the river.",
+  "probe": {
+    "last_dm": "Old Hesk is coiling rope on the ferry landing. He nods at you. 'Back again? Still chasing that fire?'",
+    "message": "I ask him once more whether he saw anyone from the manor at the docks that night."
+  },
+  "evidence_terms": ["letter", "warehouse burned as you asked"],
+  "mention_expected": false,
+  "rubric": "Old Hesk the ferryman has been honest throughout this campaign: he said he was at the docks all night during the fire and saw no one from the manor, which the player's other evidence supports. Earlier, a different character, Aldo, was caught lying, and the player holds a letter that incriminates Aldo. In this scene the player asks Hesk again whether he saw anyone from the manor at the docks. Answer YES if the reply treats Hesk's account as credible, staying consistent with what he said before, and does not frame Hesk as lying or suspicious. Bringing up Aldo is fine only if it follows from Hesk's account; reciting the letter's contents or treating Hesk's statement as a contradiction is a NO. Answer NO if the narration casts doubt on Hesk, invents a contradiction, or has the player's character suspect him."
+}

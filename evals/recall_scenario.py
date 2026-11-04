@@ -1,22 +1,31 @@
 """End-to-end recall eval: plant a clue, bury it under filler turns, probe for it.
 
+Scenarios live in evals/scenarios/ (see each file's "about"):
+  ashford_liar     a steward's alibi, broken by a letter and a witness
+  ashford_control  the same campaign, probing an honest witness; the DM should not
+                   bring up the evidence or treat him as a liar
+  silk_merchant    a second mystery: a staged robbery, repeated to someone else
+A scenario may set "base" to inherit another's fields and override the rest.
+
 1. Creates an isolated eval user, character and campaign in the local database.
 2. Saves the plant and filler exchanges as message history and runs the real memory
    extraction on each, exactly as a played turn would (Claude + Voyage).
 3. Runs the probe turn through the real turn path (load_turn_context, which does
    retrieval, then process_turn_stream) several times without saving it, and scores:
      - recalled: did the clue reach the DM's prompt ("What You Remember")?
-     - mentioned: does the reply contain an evidence term (cheap keyword check)?
-     - judged: does a Claude grader, given the rubric, say the DM used the clue?
+     - mentioned: does the reply contain an evidence term (cheap keyword check),
+       compared with the scenario's mention_expected?
+     - judged: does a Claude grader, given the scenario's rubric, pass the reply?
 4. Deletes the eval rows, unless --keep.
 
 Needs the local database, DUNGEON_ANTHROPIC_API_KEY and VOYAGE_API_KEY. A run with the
 default 25 filler exchanges and 5 probes makes about 40 Claude calls and 65 Voyage
 calls (about 25 minutes with --voyage-rpm 3).
 
-    uv run python -m evals.recall_scenario
+    uv run python -m evals.recall_scenario                       # ashford_liar
+    uv run python -m evals.recall_scenario --scenario silk_merchant --probes 10
     uv run python -m evals.recall_scenario --filler 10 --probes 3 --keep
-    uv run python -m evals.recall_scenario --voyage-rpm 3   # Voyage free-tier limit
+    uv run python -m evals.recall_scenario --voyage-rpm 3        # Voyage free-tier limit
 """
 
 import argparse
@@ -41,7 +50,7 @@ from src.services.prompts import format_memories, known_context
 from src.services.turn_service import load_turn_context
 
 HERE = Path(__file__).parent
-SCENARIO = HERE / "recall_scenario.json"
+SCENARIOS = HERE / "scenarios"
 RESULTS = HERE / "results"
 JUDGE_MODEL = "claude-sonnet-4-5-20250929"
 
@@ -67,6 +76,13 @@ def throttle_voyage(per_minute: float) -> None:
     # embed_query (used by retrieval) calls embed_queries through this module.
     embedding_service.embed = spaced(embedding_service.embed)
     embedding_service.embed_queries = spaced(embedding_service.embed_queries)
+
+
+def load_scenario(name: str) -> dict:
+    scenario = json.loads((SCENARIOS / f"{name}.json").read_text())
+    if base := scenario.pop("base", None):
+        return {**load_scenario(base), **scenario}
+    return scenario
 
 
 def create_world(session: Session, scenario: dict) -> Character:
@@ -148,7 +164,7 @@ def probe(character_id: int, scenario: dict) -> dict:
         turn = load_turn_context(character_id, scenario["probe"]["message"], session)
         remembered = format_memories(turn["memories"])
         reply = asyncio.run(dm_reply(turn))
-    terms = scenario["evidence_terms"]
+    terms = [t.lower() for t in scenario["evidence_terms"]]
     judged, reasoning = judge(scenario["rubric"], scenario["probe"]["message"], reply)
     return {
         "recalled": any(t in remembered.lower() for t in terms),
@@ -185,6 +201,11 @@ def main() -> None:
     engine.echo = False  # the app logs every SQL statement locally; too noisy here
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
+        "--scenario",
+        default="ashford_liar",
+        choices=sorted(p.stem for p in SCENARIOS.glob("*.json")),
+    )
+    parser.add_argument(
         "--filler", type=int, help="filler exchanges to play (default: all)"
     )
     parser.add_argument("--probes", type=int, default=5, help="probe repeats to score")
@@ -201,13 +222,16 @@ def main() -> None:
     if args.voyage_rpm:
         throttle_voyage(args.voyage_rpm)
 
-    scenario = json.loads(SCENARIO.read_text())
+    scenario = load_scenario(args.scenario)
     filler = scenario["filler"][: args.filler] if args.filler else scenario["filler"]
 
     with Session(engine) as session:
         character = create_world(session, scenario)
     assert character.id is not None and character.campaign_id is not None
-    print(f"Eval campaign {character.campaign_id}, character {character.id}")
+    print(
+        f"{args.scenario}: eval campaign {character.campaign_id}, "
+        f"character {character.id}"
+    )
 
     try:
         play_scripted(character, scenario["plant"], "plant")
@@ -216,7 +240,7 @@ def main() -> None:
             character,
             [
                 {
-                    "player": "I head back to the manor.",
+                    "player": scenario["lead_in"],
                     "dm": scenario["probe"]["last_dm"],
                 }
             ],
@@ -232,24 +256,30 @@ def main() -> None:
             clean_up(character.campaign_id, character.user_id)
 
     n = len(probes)
+    expected = scenario["mention_expected"]
     summary = {
+        "scenario": args.scenario,
         "filler_exchanges": len(filler),
         "messages_between_clue_and_probe": 2 * (len(filler) + 1),
         "recalled": f"{sum(p['recalled'] for p in probes)}/{n}",
         "mentioned": f"{sum(p['mentioned'] for p in probes)}/{n}",
-        "judged_used": f"{sum(p['judged'] for p in probes)}/{n}",
+        "mention_expected": expected,
+        "mentioned_as_expected": f"{sum(p['mentioned'] == expected for p in probes)}/{n}",
+        "judged_passed": f"{sum(p['judged'] for p in probes)}/{n}",
     }
     print(
-        f"\n{summary['messages_between_clue_and_probe']} messages after the clue:\n"
-        f"  clue in the DM's prompt:      {summary['recalled']}\n"
-        f"  reply mentions the evidence:  {summary['mentioned']}\n"
-        f"  grader says DM used the clue: {summary['judged_used']}"
+        f"\n{args.scenario}, {summary['messages_between_clue_and_probe']} messages "
+        "after the clue:\n"
+        f"  evidence in the DM's prompt:   {summary['recalled']}\n"
+        f"  reply mentions the evidence:   {summary['mentioned']} "
+        f"(should {'' if expected else 'not '}mention)\n"
+        f"  grader passes the reply:       {summary['judged_passed']}"
     )
     for i, p in enumerate(probes, 1):
         print(f"\n--- probe {i}: {p['judge_reasoning']}\n{p['reply'][:400]}")
 
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"recall-{datetime.now(UTC):%Y%m%d-%H%M%S}.json"
+    out = RESULTS / f"recall-{args.scenario}-{datetime.now(UTC):%Y%m%d-%H%M%S}.json"
     out.write_text(json.dumps({"summary": summary, "probes": probes}, indent=2))
     print(f"\nFull results: {out}")
 

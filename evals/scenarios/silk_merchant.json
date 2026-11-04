@@ -1,0 +1,65 @@
+{
+  "about": "A second mystery, written differently from ashford_liar so a pass there is not just the DM learning one story. The liar is a merchant, the lie is a robbery rather than an alibi, the evidence is goods with his own seal plus a caravan guard's word, and the lie comes back while he tells it to someone else in front of the player, not in answer to the player's question. Filler is ordinary trade-town play, some of it with the merchant.",
+  "mention_expected": true,
+  "lead_in": "I go to the Gilded Scale for the buyers' supper.",
+  "character": {
+    "name": "Tamsin Reed",
+    "hero_class": "Bard",
+    "age": 26,
+    "description": "A sharp-eared traveller who plays the lute for room and board.",
+    "biography": "Came to Varrow to collect a debt and stayed for the gossip.",
+    "strength": 3, "perception": 7, "endurance": 5, "charisma": 8, "intelligence": 7, "agility": 6, "luck": 6
+  },
+  "campaign": {
+    "name": "[eval] The Varrow Silk",
+    "theme": "A trade-town swindle",
+    "description": "A silk merchant says bandits took his shipment. The insurers are paying. Someone is lying."
+  },
+  "plant": [
+    {
+      "player": "I ask Master Corvin Hale what happened to his silk shipment.",
+      "dm": "Corvin Hale, the silk merchant, throws up his hands. 'Bandits on the north road, three nights past. Took every bolt, forty bolts of Qessari silk. The guild insurers are paying out, thank the gods, but I'm ruined all the same.'"
+    },
+    {
+      "player": "While Corvin is at the guildhall, I slip into his warehouse cellar and look around.",
+      "dm": "Behind a false wall of empty barrels you find them: forty bolts of Qessari silk, each still wrapped and stamped with Corvin Hale's own blue wax seal. Not a thread missing."
+    },
+    {
+      "player": "Bram, you guarded Corvin's caravan on the north road. Were you attacked?",
+      "dm": "Bram Holt, the caravan guard, frowns. 'Attacked? No. Quietest run I've had. Corvin had us unload at his warehouse at midnight and paid us double to keep our mouths shut.'"
+    }
+  ],
+  "filler": [
+    {"player": "I take a room above the Gilded Scale.", "dm": "Innkeeper Odile hands you a brass key and warns you the stairs creak."},
+    {"player": "I play a few songs in the common room.", "dm": "A drover tosses you a copper and requests something sad."},
+    {"player": "I ask Corvin how the silk trade is faring this season.", "dm": "Corvin sighs. 'Prices are up, buyers are nervous. Good for some, not for me.'"},
+    {"player": "I browse the spice stalls in the market.", "dm": "Saffron, cumin and a dealer who insists his pepper cures gout."},
+    {"player": "I ask Odile about the guild insurers.", "dm": "Odile shrugs. 'Pay slow, ask a lot of questions. Old Marta runs the office.'"},
+    {"player": "I tune my lute by the window.", "dm": "A pigeon watches with professional interest."},
+    {"player": "I share a pie with Corvin at the cookshop.", "dm": "Corvin talks about his daughter's wedding and the cost of musicians."},
+    {"player": "I walk along the canal.", "dm": "Barges loaded with wool drift by. A boy fishes for eels."},
+    {"player": "I ask the dyer what colours sell best.", "dm": "'Blue,' she says, 'always blue.' Her hands are stained to the elbow."},
+    {"player": "I ask Corvin whether he knows a good cobbler.", "dm": "'Pell, on Tanner's Row. Tell him I sent you and he'll overcharge you less.'"},
+    {"player": "I buy new lute strings.", "dm": "The luthier sells you gut strings and a lecture on humidity."},
+    {"player": "I watch a puppet show in the square.", "dm": "A wooden knight defeats a wooden dragon to scattered applause."},
+    {"player": "I ask Odile what's for supper.", "dm": "'Eel stew,' she says. 'It's always eel stew.'"},
+    {"player": "I help Corvin carry ledgers to the guildhall.", "dm": "Corvin thanks you. 'A bard who lifts things. Varrow is full of surprises.'"},
+    {"player": "I sleep late.", "dm": "You wake to bells and the smell of bread."},
+    {"player": "I write a verse about the canal.", "dm": "It rhymes 'water' with 'daughter', which you decide to keep."},
+    {"player": "I ask a guard about the north road.", "dm": "'Muddy this time of year. Mind the ruts.'"},
+    {"player": "I play dice with the drovers.", "dm": "You lose four coppers and win one back."},
+    {"player": "I ask Corvin about his daughter's wedding.", "dm": "Corvin beams. 'Spring, if the money holds. Everything depends on the money.'"},
+    {"player": "I visit the temple of the Twin Scales.", "dm": "A priest weighs your offering on a tiny brass balance and nods."},
+    {"player": "I ask the cobbler to mend my boots.", "dm": "Pell grumbles about the state of them and quotes a fair price anyway."},
+    {"player": "I listen to gossip at the well.", "dm": "Someone's goat ate someone else's washing. Feelings run high."},
+    {"player": "I buy a ribbon for my lute.", "dm": "A seller offers green or a deeply alarming orange."},
+    {"player": "I ask Odile about Old Marta.", "dm": "'Sharp as a needle. Never forgets a number.'"},
+    {"player": "I head back to the inn for supper.", "dm": "The eel stew is, as promised, eel stew."}
+  ],
+  "probe": {
+    "last_dm": "At the buyers' supper, Corvin Hale is seated beside Old Marta of the guild insurers. He raises his cup to the table. 'Forty bolts of Qessari silk, gone to bandits on the north road. I'm only glad the guild stands by its members.' Marta nods sympathetically and makes a note.",
+    "message": "I keep eating and listen."
+  },
+  "evidence_terms": ["seal", "cellar", "bram", "forty bolts", "barrels"],
+  "rubric": "Earlier in the game the player found all forty bolts of Corvin Hale's 'stolen' silk hidden in his own cellar under his own wax seal, and the caravan guard Bram said there was no attack and that Corvin paid the guards to keep quiet. Corvin claims bandits took the silk so the guild insurers will pay him. In this scene he repeats the robbery story to an insurer in front of the player, and the player only listens. Answer YES if the reply shows the DM remembers this: it treats the robbery story as a lie the player can see through, or recalls the hidden silk, the seal, or Bram's account. It must not decide for the player to speak up. Answer NO if the robbery story passes as true with no sign the player knows otherwise, or if the reply has the player confront Corvin or tell Marta on their own."
+}
