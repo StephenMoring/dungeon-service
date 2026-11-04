@@ -6,6 +6,7 @@ import pytest
 
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
 from src.models.character import Character
+from src.models.memory import EventMemory, ItemMemory, NpcMemory
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta
 from src.services.memory_service import RetrievedMemories
@@ -122,6 +123,23 @@ class TestTurnMemories:
         load_turn_context(1, "I look around", session)
 
         assert retrieve.call_args.args[1] == "I look around"
+
+    def test_logs_what_was_recalled(self, retrieve, caplog):
+        retrieve.return_value = RetrievedMemories(
+            npcs=[NpcMemory(campaign_id=1, name="Aldo")],
+            items=[ItemMemory(campaign_id=1, name="Aldo's Letter")],
+            events=[EventMemory(campaign_id=1, summary="Found the letter in his desk")],
+        )
+
+        with caplog.at_level("INFO", logger="src.services.turn_service"):
+            load_turn_context(1, "Where were you that night?", default_session())
+
+        (record,) = [r for r in caplog.records if r.msg.startswith("Recalled")]
+        line = record.getMessage()
+        assert "npcs=['Aldo']" in line
+        assert 'items=["Aldo\'s Letter"]' in line
+        assert "events=['Found the letter in his desk']" in line
+        assert "locations=[]" in line
 
     def test_adds_memories_to_turn(self, retrieve):
         memories = RetrievedMemories()

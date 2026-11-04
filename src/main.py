@@ -1,9 +1,15 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from src.api.characters import character_router
 from src.api.campaigns import campaigns_router
 from src.api.auth import auth_router
+
+# The app's own loggers (src.*) report at INFO, e.g. which memories each turn recalled.
+logging.basicConfig(format="%(levelname)s:     %(name)s - %(message)s")
+logging.getLogger("src").setLevel(logging.INFO)
 
 
 @asynccontextmanager

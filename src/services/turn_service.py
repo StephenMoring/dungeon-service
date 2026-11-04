@@ -78,10 +78,20 @@ def _recall(
     )
     query = f"{last_dm}\n\n{message}" if last_dm else message
     try:
-        return retrieve_memories(campaign_id, query, session)
+        memories = retrieve_memories(campaign_id, query, session)
     except Exception:
         logger.exception("Memory lookup failed", extra={"campaign_id": campaign_id})
         return RetrievedMemories()
+    # One line per turn, so a forgotten fact can be traced to retrieval or to the DM.
+    logger.info(
+        "Recalled for campaign %s: npcs=%s locations=%s items=%s events=%s",
+        campaign_id,
+        [n.name for n in memories.npcs],
+        [loc.name for loc in memories.locations],
+        [i.name for i in memories.items],
+        [e.summary for e in memories.events],
+    )
+    return memories
 
 
 def save_turn(

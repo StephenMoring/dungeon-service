@@ -118,6 +118,6 @@ uv run mypy src
 
 ## Known gaps
 
-- `mypy src` reports existing errors in `embedding_service.py` and `models/memory.py`
+- `mypy src` reports one existing error: `pgvector.sqlalchemy` ships no type stubs (`models/memory.py`)
 - Saving a turn runs synchronously inside the stream; fine for a few players, not for many at once
 - The DM's stat and difficulty choices are limited by the tool schema but not re-checked on the server

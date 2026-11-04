@@ -23,6 +23,51 @@ def embed_query(text: str) -> list[float]:
     return cast(list[float], result.embeddings[0])
 
 
+type Memory = NpcMemory | LocationMemory | ItemMemory | EventMemory
+
+
+def _join(existing: str | None, new: str | None) -> str | None:
+    """Append newly extracted text to what is already stored."""
+    if not new:
+        return existing
+    return f"{existing}, {new}" if existing else new
+
+
+def _sentences(*parts: str | None) -> str:
+    return " ".join(part for part in parts if part)
+
+
+def memory_text(memory: Memory) -> str:
+    """The text a memory is embedded from: every stored field, as plain sentences."""
+    match memory:
+        case NpcMemory():
+            return _sentences(
+                f"A character named {memory.name}.",
+                memory.role and f"Their role is {memory.role}.",
+                memory.disposition and f"Their disposition is {memory.disposition}.",
+                memory.known_facts and f"Known facts: {memory.known_facts}.",
+                memory.secrets and f"Secrets: {memory.secrets}.",
+            )
+        case LocationMemory():
+            return _sentences(
+                f"A location named {memory.name}.",
+                memory.description and f"Description: {memory.description}.",
+                memory.events and f"Events that occurred here: {memory.events}.",
+            )
+        case ItemMemory():
+            return _sentences(
+                f"An item named {memory.name}.",
+                memory.description and f"Description: {memory.description}.",
+                memory.where_found and f"Found at: {memory.where_found}.",
+                memory.status and f"Current status: {memory.status}.",
+            )
+        case EventMemory():
+            return _sentences(
+                f"An event occurred: {memory.summary}.",
+                memory.category and f"Category: {memory.category}.",
+            )
+
+
 def extract_and_store_memories(campaign_id: int, messages: list):
     with Session(engine) as session:
         memories = extract_memories(messages[0], messages[1])
@@ -50,143 +95,66 @@ def extract_and_store_memories(campaign_id: int, messages: list):
             EventMemory(campaign_id=campaign_id, **event) for event in data["events"]
         ]
 
-        all_memory_objects = npcs + locations + items + events
-        all_memory_texts = [
-            *[
-                " ".join(
-                    filter(
-                        None,
-                        [
-                            f"A character named {npc.name}.",
-                            f"Their role is {npc.role}." if npc.role else None,
-                            f"Their disposition is {npc.disposition}."
-                            if npc.disposition
-                            else None,
-                            f"Known facts: {npc.known_facts}."
-                            if npc.known_facts
-                            else None,
-                            f"Secrets: {npc.secrets}." if npc.secrets else None,
-                        ],
-                    )
-                )
-                for npc in npcs
-            ],
-            *[
-                " ".join(
-                    filter(
-                        None,
-                        [
-                            f"A location named {location.name}.",
-                            f"Description: {location.description}."
-                            if location.description
-                            else None,
-                            f"Events that occurred here: {location.events}."
-                            if location.events
-                            else None,
-                        ],
-                    )
-                )
-                for location in locations
-            ],
-            *[
-                " ".join(
-                    filter(
-                        None,
-                        [
-                            f"An item named {item.name}.",
-                            f"Description: {item.description}."
-                            if item.description
-                            else None,
-                            f"Found at: {item.where_found}."
-                            if item.where_found
-                            else None,
-                            f"Current status: {item.status}." if item.status else None,
-                        ],
-                    )
-                )
-                for item in items
-            ],
-            *[
-                " ".join(
-                    filter(
-                        None,
-                        [
-                            f"An event occurred: {event.summary}.",
-                            f"Category: {event.category}." if event.category else None,
-                        ],
-                    )
-                )
-                for event in events
-            ],
-        ]
-
-        memory_embeddings = embed(all_memory_texts)
-
-        for vector, memory in zip(memory_embeddings, all_memory_objects):
-            memory.embedding = vector
+        stored: list[Memory] = []
 
         logger.info("upserting memories")
         for npc in npcs:
-            existing = session.exec(
+            known_npc = session.exec(
                 select(NpcMemory).where(
                     NpcMemory.campaign_id == npc.campaign_id, NpcMemory.name == npc.name
                 )
             ).first()
-            if existing:
-                existing.role = npc.role
-                existing.disposition = npc.disposition
-                if npc.known_facts:
-                    existing.known_facts = (
-                        f"{existing.known_facts}, {npc.known_facts}"
-                        if existing.known_facts
-                        else npc.known_facts
-                    )
-                if npc.secrets:
-                    existing.secrets = (
-                        f"{existing.secrets}, {npc.secrets}"
-                        if existing.secrets
-                        else npc.secrets
-                    )
-                existing.embedding = npc.embedding
+            if known_npc:
+                known_npc.role = npc.role
+                known_npc.disposition = npc.disposition
+                known_npc.known_facts = _join(known_npc.known_facts, npc.known_facts)
+                known_npc.secrets = _join(known_npc.secrets, npc.secrets)
+                stored.append(known_npc)
             else:
                 session.add(npc)
+                stored.append(npc)
 
         for location in locations:
-            existing = session.exec(
+            known_location = session.exec(
                 select(LocationMemory).where(
                     LocationMemory.campaign_id == location.campaign_id,
                     LocationMemory.name == location.name,
                 )
             ).first()
-            if existing:
-                existing.description = location.description
-                if location.events:
-                    existing.events = (
-                        f"{existing.events}, {location.events}"
-                        if existing.events
-                        else location.events
-                    )
-                existing.embedding = location.embedding
+            if known_location:
+                known_location.description = location.description
+                known_location.events = _join(known_location.events, location.events)
+                stored.append(known_location)
             else:
                 session.add(location)
+                stored.append(location)
 
         for item in items:
-            existing = session.exec(
+            known_item = session.exec(
                 select(ItemMemory).where(
                     ItemMemory.campaign_id == item.campaign_id,
                     ItemMemory.name == item.name,
                 )
             ).first()
-            if existing:
-                existing.description = item.description
-                if not existing.where_found:
-                    existing.where_found = item.where_found
-                existing.status = item.status
-                existing.embedding = item.embedding
+            if known_item:
+                known_item.description = item.description
+                if not known_item.where_found:
+                    known_item.where_found = item.where_found
+                known_item.status = item.status
+                stored.append(known_item)
             else:
                 session.add(item)
+                stored.append(item)
 
         for event in events:
             session.add(event)
+            stored.append(event)
+
+        # Embed after merging, so a known NPC's vector covers everything stored about
+        # them, not just what this turn added.
+        if stored:
+            vectors = embed([memory_text(memory) for memory in stored])
+            for memory, vector in zip(stored, vectors, strict=True):
+                memory.embedding = vector
 
         session.commit()
