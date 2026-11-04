@@ -1,11 +1,15 @@
+import json
+import logging
+from typing import cast
+
+import voyageai
+from sqlalchemy import func
+from sqlmodel import Session, select
+
+from src.db.db import engine
 from src.models.memory import EventMemory, ItemMemory, LocationMemory, NpcMemory
 from src.services.dm_agent import extract_memories
-from sqlmodel import Session, select
-from src.db.db import engine
-from typing import cast
-import logging
-import json
-import voyageai
+from src.services.prompts import KnownNames
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +77,36 @@ def memory_text(memory: Memory) -> str:
             )
 
 
-def extract_and_store_memories(campaign_id: int, messages: list):
+def _known_names(
+    session: Session,
+    model: type[NpcMemory | LocationMemory | ItemMemory],
+    campaign_id: int,
+) -> list[str]:
+    return list(
+        session.exec(
+            select(model.name)
+            .where(model.campaign_id == campaign_id)
+            .order_by(model.name)
+        ).all()
+    )
+
+
+def extract_and_store_memories(
+    campaign_id: int, messages: list, already_known: str = ""
+):
+    """Extract memories from one exchange and store them.
+
+    `already_known` is what the turn recalled for the DM, as text (prompts.known_context);
+    extraction checks the exchange against it, so a contradicted claim is recorded as a
+    lie on the right character.
+    """
     with Session(engine) as session:
-        memories = extract_memories(messages[0], messages[1])
+        known = KnownNames(
+            npcs=_known_names(session, NpcMemory, campaign_id),
+            locations=_known_names(session, LocationMemory, campaign_id),
+            items=_known_names(session, ItemMemory, campaign_id),
+        )
+        memories = extract_memories(messages[0], messages[1], known, already_known)
         if not memories:
             logger.warning(
                 "Memory extraction returned no content",
@@ -106,7 +137,8 @@ def extract_and_store_memories(campaign_id: int, messages: list):
         for npc in npcs:
             known_npc = session.exec(
                 select(NpcMemory).where(
-                    NpcMemory.campaign_id == npc.campaign_id, NpcMemory.name == npc.name
+                    NpcMemory.campaign_id == npc.campaign_id,
+                    func.lower(NpcMemory.name) == func.lower(npc.name),
                 )
             ).first()
             if known_npc:
@@ -123,7 +155,7 @@ def extract_and_store_memories(campaign_id: int, messages: list):
             known_location = session.exec(
                 select(LocationMemory).where(
                     LocationMemory.campaign_id == location.campaign_id,
-                    LocationMemory.name == location.name,
+                    func.lower(LocationMemory.name) == func.lower(location.name),
                 )
             ).first()
             if known_location:
@@ -138,7 +170,7 @@ def extract_and_store_memories(campaign_id: int, messages: list):
             known_item = session.exec(
                 select(ItemMemory).where(
                     ItemMemory.campaign_id == item.campaign_id,
-                    ItemMemory.name == item.name,
+                    func.lower(ItemMemory.name) == func.lower(item.name),
                 )
             ).first()
             if known_item:

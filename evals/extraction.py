@@ -15,11 +15,26 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from src.models.memory import EventMemory, ItemMemory, LocationMemory, NpcMemory
 from src.services.dm_agent import extract_memories
+from src.services.memory_service import RetrievedMemories
+from src.services.prompts import KnownNames, known_context
 
 HERE = Path(__file__).parent
 CASES = HERE / "extraction_cases.json"
 RESULTS = HERE / "results"
+
+
+def recalled(spec: dict) -> RetrievedMemories:
+    """The memories a turn would have retrieved, built from a case's `recalled`."""
+    return RetrievedMemories(
+        npcs=[NpcMemory(campaign_id=0, **n) for n in spec.get("npcs", [])],
+        locations=[
+            LocationMemory(campaign_id=0, **x) for x in spec.get("locations", [])
+        ],
+        items=[ItemMemory(campaign_id=0, **x) for x in spec.get("items", [])],
+        events=[EventMemory(campaign_id=0, **x) for x in spec.get("events", [])],
+    )
 
 
 def _text(value: object) -> str:
@@ -35,6 +50,8 @@ def check(extracted: dict, spec: dict) -> bool:
         return len(records) == spec["count"]
     if not records:
         return False
+    if "all_named" in spec:
+        return all(r.get("name") == spec["all_named"] for r in records)
 
     def values(record: dict) -> list[str]:
         if spec["field"] == "any":
@@ -55,6 +72,8 @@ def label(spec: dict) -> str:
     target = f"{spec['kind']}[{spec['name']}]" if "name" in spec else spec["kind"]
     if "count" in spec:
         return f"{target} count == {spec['count']}"
+    if "all_named" in spec:
+        return f"{target} all named {spec['all_named']!r}"
     if spec.get("absent"):
         return f"{target}.{spec['field']} is empty"
     return f"{target}.{spec['field']} mentions {' / '.join(spec['any_of'])}"
@@ -75,7 +94,12 @@ def main() -> None:
     for case in cases:
         runs = []
         for _ in range(args.runs):
-            raw = extract_memories(case["player"], case["dm"])
+            raw = extract_memories(
+                case["player"],
+                case["dm"],
+                KnownNames(**case.get("known", {})),
+                known_context(recalled(case.get("recalled", {}))),
+            )
             extracted = json.loads(raw) if raw else {}
             runs.append(
                 {

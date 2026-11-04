@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -77,11 +78,51 @@ def _line(label: str, value: str | None) -> str:
     return f" {label}: {value}." if value else ""
 
 
-def format_memories(memories: "RetrievedMemories") -> str:
-    """Render retrieved campaign memories as a prompt section; empty when there are none."""
-    if memories.is_empty():
-        return ""
+@dataclass
+class KnownNames:
+    """Names of memories already stored for a campaign, so extraction reuses them."""
 
+    npcs: list[str] = field(default_factory=list)
+    locations: list[str] = field(default_factory=list)
+    items: list[str] = field(default_factory=list)
+
+
+def _names(names: list[str]) -> str:
+    return ", ".join(names) if names else "none yet"
+
+
+def known_context(memories: "RetrievedMemories | None") -> str:
+    """What a turn recalled, as plain text for memory extraction.
+
+    Rendered while the turn's database session is open: extraction runs in a
+    background task after the session closes, so it must not touch the ORM rows.
+    """
+    if not memories or memories.is_empty():
+        return ""
+    return _memory_sections(memories)
+
+
+def build_memory_extraction_prompt(
+    player_message: str,
+    dm_message: str,
+    known: KnownNames,
+    already_known: str = "",
+) -> str:
+    known_names = (
+        f"- Characters: {_names(known.npcs)}\n"
+        f"- Locations: {_names(known.locations)}\n"
+        f"- Items: {_names(known.items)}"
+    )
+    return memory_extraction_prompt.format(
+        player_message=player_message,
+        dm_message=dm_message,
+        known_names=known_names,
+        already_known=already_known or "Nothing relevant recalled.",
+    )
+
+
+def _memory_sections(memories: "RetrievedMemories") -> str:
+    """Retrieved memories as markdown, one subsection per kind."""
     sections = []
     if memories.npcs:
         lines = [
@@ -109,12 +150,19 @@ def format_memories(memories: "RetrievedMemories") -> str:
         ]
         sections.append("### Events\n" + "\n".join(lines))
 
+    return "\n\n".join(sections)
+
+
+def format_memories(memories: "RetrievedMemories") -> str:
+    """Render retrieved campaign memories as a prompt section; empty when there are none."""
+    if memories.is_empty():
+        return ""
     return (
         "## What You Remember\n"
         "Facts from earlier in this campaign that the player has already seen or learned. "
         "Stay consistent with them. Characters keep their secrets and may lie, but the player "
         "knows what is listed here, so their lies can be caught.\n\n"
-        + "\n\n".join(sections)
+        + _memory_sections(memories)
         + "\n"
     )
 
@@ -190,6 +238,19 @@ Given the following exchange between a player and the DM, identify any new or up
 Only extract facts that were clearly established in this exchange — do not infer or invent. If nothing new was established in a category, return an empty array for it.
 
 When extracting names, prioritize the DM's response as the canonical source. If the player uses a shorthand or partial name, use the full name as it appears in the DM's response.
+
+## Already Recorded
+{known_names}
+
+These are already recorded in this campaign. When the exchange refers to one of them, even by a shorter name, a title or a fuller name ("the steward", "Aldo", "Aldo Venn"), use the recorded name exactly, so the new facts join the existing record. Only use a new name for a character, place or item that is not listed.
+
+## Already Known
+What was recorded earlier about the people, places and things this exchange touches. Use it to notice contradictions; do not copy these facts into your output unless the exchange changes them.
+
+{already_known}
+
+## Lies and Contradictions
+When the exchange shows that a character's earlier claim is false (evidence, a witness, a slip of the tongue), record it in that character's `secrets` as "Lied about <the claim>; evidence: <what shows it>". Record it on the character who lied, even if they are not in this exchange. Check every claim in Already Known against the exchange.
 
 ## Event Categories
 Use one of: "decision", "revelation", "deal", "consequence"

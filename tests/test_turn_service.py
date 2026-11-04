@@ -9,6 +9,7 @@ from src.models.character import Character
 from src.models.memory import EventMemory, ItemMemory, NpcMemory
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta
+from src.services.embedding_service import extract_and_store_memories
 from src.services.memory_service import RetrievedMemories
 from src.services.turn_service import (
     load_turn_context,
@@ -16,7 +17,6 @@ from src.services.turn_service import (
     stream_turn,
 )
 from src.tools.dice_tools import RollResult
-from src.services.embedding_service import extract_and_store_memories
 from tests.conftest import compiled_sql, make_character
 
 
@@ -176,6 +176,7 @@ def make_turn():
         "current_checkpoint": None,
         "recent_messages": [],
         "message": "I sneak",
+        "memories": RetrievedMemories(npcs=[NpcMemory(campaign_id=1, name="Aldo")]),
     }
 
 
@@ -244,9 +245,17 @@ class TestStreamTurn:
         ):
             await run_stream(tasks)
 
-        tasks.add_task.assert_called_once_with(
-            extract_and_store_memories, 1, ["I sneak", "ab"]
+        # The memories this turn recalled go along, so extraction can tell when the
+        # exchange contradicts something already known (e.g. catches a lie).
+        # Passed as text: the task runs after the turn's DB session has closed.
+        (task, campaign_id, messages, already_known), _ = tasks.add_task.call_args
+        assert (task, campaign_id, messages) == (
+            extract_and_store_memories,
+            1,
+            ["I sneak", "ab"],
         )
+        assert isinstance(already_known, str)
+        assert "Aldo" in already_known
 
     @patch("src.services.turn_service.save_turn")
     async def test_error_after_roll_saves_nothing(self, save):

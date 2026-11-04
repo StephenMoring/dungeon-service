@@ -5,6 +5,7 @@ import pytest
 
 from src.models.memory import ItemMemory, LocationMemory, NpcMemory
 from src.services.embedding_service import embed_query, extract_and_store_memories
+from tests.conftest import compiled_sql
 
 
 @patch("src.services.embedding_service.voyageai.Client")
@@ -38,13 +39,18 @@ def store():
     Returns the mocked session and embed so tests can inspect what was stored.
     """
 
-    def run(extracted: str, existing: dict | None = None):
+    def run(extracted: str, existing: dict | None = None, already_known: str = ""):
         existing = existing or {}
         session = MagicMock()
 
         def exec_(statement):
             model = statement.column_descriptions[0]["entity"]
-            return MagicMock(first=MagicMock(return_value=existing.get(model)))
+            row = existing.get(model)
+            return MagicMock(
+                first=MagicMock(return_value=row),
+                # The known-names lookup selects just the name column.
+                all=MagicMock(return_value=[row.name] if row else []),
+            )
 
         session.exec.side_effect = exec_
         embed = MagicMock(
@@ -55,11 +61,12 @@ def store():
             patch(
                 "src.services.embedding_service.extract_memories",
                 return_value=extracted,
-            ),
+            ) as extract,
             patch("src.services.embedding_service.embed", embed),
         ):
             session_cls.return_value.__enter__.return_value = session
-            extract_and_store_memories(7, ["player says", "dm says"])
+            extract_and_store_memories(7, ["player says", "dm says"], already_known)
+        session.extract = extract
         return session, embed
 
     return run
@@ -146,3 +153,45 @@ class TestMergedMemoriesAreReembedded:
 
         embed.assert_not_called()
         session.commit.assert_called_once()
+
+
+class TestOneRecordPerName:
+    def test_extraction_is_told_the_names_already_recorded(self, store):
+        aldo = NpcMemory(id=1, campaign_id=7, name="Aldo Venn")
+        letter = ItemMemory(id=1, campaign_id=7, name="Unsent letter")
+
+        session, _ = store(extraction(), existing={NpcMemory: aldo, ItemMemory: letter})
+
+        known = session.extract.call_args.args[2]
+        assert known.npcs == ["Aldo Venn"]
+        assert known.items == ["Unsent letter"]
+        assert known.locations == []
+
+    def test_known_names_are_looked_up_for_this_campaign_only(self, store):
+        session, _ = store(extraction())
+
+        names_query = compiled_sql(session.exec.call_args_list[0].args[0])
+        assert "npcmemory.campaign_id = 7" in names_query
+
+    def test_records_are_matched_ignoring_case(self, store):
+        manor = LocationMemory(id=1, campaign_id=7, name="The Manor", events="Met Aldo")
+
+        session, _ = store(
+            extraction(locations=[{"name": "the manor", "events": "Fire alarm"}]),
+            existing={LocationMemory: manor},
+        )
+
+        lookups = [compiled_sql(c.args[0]) for c in session.exec.call_args_list]
+        assert any(
+            "lower(locationmemory.name) = lower('the manor')" in q for q in lookups
+        )
+        assert manor.events == "Met Aldo, Fire alarm"
+        session.add.assert_not_called()
+
+
+def test_extraction_sees_what_the_turn_recalled(store):
+    session, _ = store(
+        extraction(), already_known="Aldo Venn: claims he was at the docks"
+    )
+
+    assert session.extract.call_args.args[3] == "Aldo Venn: claims he was at the docks"

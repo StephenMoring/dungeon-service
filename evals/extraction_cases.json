@@ -1,15 +1,48 @@
 {
-  "about": "Scripted exchanges and what memory extraction should store from them. A check finds the extracted record of `kind` whose name contains `name` (case-insensitive) and asserts on `field`: `any_of` passes if the field contains any listed phrase, `absent` passes if the field is empty. `field: \"any\"` searches every field of the record. A check with no `name` looks across all records of that kind; `count: 0` asserts there are none.",
+  "about": "Scripted exchanges and what memory extraction should store from them. A check finds the extracted record of `kind` whose name contains `name` (case-insensitive) and asserts on `field`: `any_of` passes if the field contains any listed phrase, `absent` passes if the field is empty. `field: \"any\"` searches every field of the record. A check with no `name` looks across all records of that kind; `count: 0` asserts there are none. A case may list `known` names (npcs, locations, items) already recorded in the campaign, which extraction is told about. `all_named` passes if every matching record uses exactly that name, i.e. no duplicate record was started. `recalled` lists the memories the turn retrieved for the DM, which a real turn passes to extraction so it can catch contradictions.",
   "cases": [
     {
       "id": "find-the-letter",
       "player": "While Aldo is at the feast, I pick the lock on his desk drawer and read whatever is inside.",
       "dm": "The lock gives with a soft click. Beneath a stack of receipts lies an unsent letter in Aldo's careful hand: 'It is done. The warehouse burned as you asked. Meet me at the east bank.' It is dated the night of the fire. So much for the docks.",
       "checks": [
-        {"kind": "items", "name": "letter", "field": "description", "any_of": ["warehouse", "burn", "fire"]},
-        {"kind": "items", "name": "letter", "field": "where_found", "any_of": ["desk", "drawer"]},
-        {"kind": "npcs", "name": "aldo", "field": "any", "any_of": ["warehouse", "letter", "lied", "lie"]},
-        {"kind": "events", "field": "category", "any_of": ["revelation"]}
+        {
+          "kind": "items",
+          "name": "letter",
+          "field": "description",
+          "any_of": [
+            "warehouse",
+            "burn",
+            "fire"
+          ]
+        },
+        {
+          "kind": "items",
+          "name": "letter",
+          "field": "where_found",
+          "any_of": [
+            "desk",
+            "drawer"
+          ]
+        },
+        {
+          "kind": "npcs",
+          "name": "aldo",
+          "field": "any",
+          "any_of": [
+            "warehouse",
+            "letter",
+            "lied",
+            "lie"
+          ]
+        },
+        {
+          "kind": "events",
+          "field": "category",
+          "any_of": [
+            "revelation"
+          ]
+        }
       ]
     },
     {
@@ -17,8 +50,28 @@
       "player": "Old Hesk, you run the night ferry. Did anyone from the manor come down to the docks the night of the fire?",
       "dm": "Hesk scratches his beard. 'Nobody from the manor. I'd remember, they tip poorly.' He squints at you. 'Certainly not that steward, Aldo. Why, did he say he was here?'",
       "checks": [
-        {"kind": "npcs", "name": "hesk", "field": "any", "any_of": ["docks", "ferry"]},
-        {"kind": "npcs", "name": "aldo", "field": "any", "any_of": ["docks", "not at", "wasn't", "was not", "lie", "lied"]}
+        {
+          "kind": "npcs",
+          "name": "hesk",
+          "field": "any",
+          "any_of": [
+            "docks",
+            "ferry"
+          ]
+        },
+        {
+          "kind": "npcs",
+          "name": "aldo",
+          "field": "any",
+          "any_of": [
+            "docks",
+            "not at",
+            "wasn't",
+            "was not",
+            "lie",
+            "lied"
+          ]
+        }
       ]
     },
     {
@@ -26,8 +79,24 @@
       "player": "Captain Voss, I'll find whoever set the fire. In return you forget I was ever in that warehouse.",
       "dm": "Voss spits. 'Fine. Bring me a name by the new moon and your little break-in never happened. Fail, and I remember everything.'",
       "checks": [
-        {"kind": "events", "field": "category", "any_of": ["deal"]},
-        {"kind": "npcs", "name": "voss", "field": "any", "any_of": ["name", "deal", "break-in", "warehouse"]}
+        {
+          "kind": "events",
+          "field": "category",
+          "any_of": [
+            "deal"
+          ]
+        },
+        {
+          "kind": "npcs",
+          "name": "voss",
+          "field": "any",
+          "any_of": [
+            "name",
+            "deal",
+            "break-in",
+            "warehouse"
+          ]
+        }
       ]
     },
     {
@@ -35,7 +104,15 @@
       "player": "I ask the steward how long he has served here.",
       "dm": "Aldo Venn smooths his coat. 'Twenty years, come the harvest. I served the late Lady Ashford before her son.'",
       "checks": [
-        {"kind": "npcs", "name": "aldo venn", "field": "known_facts", "any_of": ["twenty", "20"]}
+        {
+          "kind": "npcs",
+          "name": "aldo venn",
+          "field": "known_facts",
+          "any_of": [
+            "twenty",
+            "20"
+          ]
+        }
       ]
     },
     {
@@ -43,7 +120,12 @@
       "player": "I accept a cup of wine from Aldo and ask about the harvest.",
       "dm": "Aldo pours generously. 'The best in years,' he says, and talks for some time about barley.",
       "checks": [
-        {"kind": "npcs", "name": "aldo", "field": "secrets", "absent": true}
+        {
+          "kind": "npcs",
+          "name": "aldo",
+          "field": "secrets",
+          "absent": true
+        }
       ]
     },
     {
@@ -51,8 +133,83 @@
       "player": "I thank Mira for the stew.",
       "dm": "Mira waves you off with a smile and goes back to wiping the bar.",
       "checks": [
-        {"kind": "items", "count": 0}
+        {
+          "kind": "items",
+          "count": 0
+        }
       ]
+    },
+    {
+      "id": "known-character-keeps-one-name",
+      "known": {
+        "npcs": [
+          "Aldo Venn",
+          "Old Hesk"
+        ],
+        "locations": [
+          "The Docks"
+        ]
+      },
+      "player": "I find Aldo in the courtyard and ask how the harvest is going.",
+      "dm": "Aldo wipes his hands on his apron. 'Barley's in. Cider's next.' The steward seems tired.",
+      "checks": [
+        {
+          "kind": "npcs",
+          "name": "aldo",
+          "all_named": "Aldo Venn"
+        }
+      ]
+    },
+    {
+      "id": "known-liar-is-recorded-as-lying",
+      "known": {
+        "npcs": [
+          "Aldo Venn",
+          "Old Hesk"
+        ],
+        "locations": [
+          "The Docks"
+        ],
+        "items": [
+          "Unsent letter"
+        ]
+      },
+      "player": "Old Hesk, did anyone from the manor come down to the docks the night of the fire?",
+      "dm": "Hesk scratches his beard. 'Nobody from the manor. Certainly not that steward. I was here all night.'",
+      "checks": [
+        {
+          "kind": "npcs",
+          "name": "aldo",
+          "all_named": "Aldo Venn"
+        },
+        {
+          "kind": "npcs",
+          "name": "aldo",
+          "field": "secrets",
+          "any_of": [
+            "lied",
+            "lie",
+            "false"
+          ]
+        },
+        {
+          "kind": "npcs",
+          "name": "aldo",
+          "field": "secrets",
+          "any_of": [
+            "docks"
+          ]
+        }
+      ],
+      "recalled": {
+        "npcs": [
+          {
+            "name": "Aldo Venn",
+            "role": "steward of House Ashford",
+            "known_facts": "Claims he was at the docks seeing to a grain shipment the night the warehouse burned"
+          }
+        ]
+      }
     }
   ]
 }

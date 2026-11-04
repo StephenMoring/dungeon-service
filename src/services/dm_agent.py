@@ -1,16 +1,20 @@
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+from typing import cast
+
 from anthropic import Anthropic, AsyncAnthropic
 from anthropic.types import MessageParam, TextBlock, ToolUseBlock
-from typing import AsyncGenerator, cast
+
 from src.config import ANTHROPIC_API_KEY
-from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
-from src.tools.dice_tools import RollResult, handle_roll_check, roll_check_tool
 from src.services.prompts import (
+    KnownNames,
+    build_memory_extraction_prompt,
     build_turn_system_prompt,
     campaign_creation_prompt,
     character_creation_prompt,
-    memory_extraction_prompt,
 )
+from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
+from src.tools.dice_tools import RollResult, handle_roll_check, roll_check_tool
 
 client = Anthropic(api_key=ANTHROPIC_API_KEY)
 async_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
@@ -192,10 +196,14 @@ MEMORIES_SCHEMA = {
 }
 
 
-def extract_memories(player_message: str, dm_message: str) -> str | None:
-    prompt = memory_extraction_prompt.format(
-        player_message=player_message,
-        dm_message=dm_message,
+def extract_memories(
+    player_message: str,
+    dm_message: str,
+    known: KnownNames | None = None,
+    already_known: str = "",
+) -> str | None:
+    prompt = build_memory_extraction_prompt(
+        player_message, dm_message, known or KnownNames(), already_known
     )
     message = client.messages.create(
         max_tokens=1024,

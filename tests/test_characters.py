@@ -4,6 +4,7 @@ from src.models.campaign import Campaign
 from src.models.character import HeroClass, Race
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta
+from src.services.prompts import known_context
 from src.tools.dice_tools import RollResult
 from tests.conftest import make_character
 
@@ -199,11 +200,14 @@ class TestPlayTurnStream:
         self, mock_load, _save, memories, client, session
     ):
         session.get.return_value = make_character()
-        mock_load.return_value = turn_context()
+        turn = turn_context()
+        mock_load.return_value = turn
 
         client.post("/characters/1/turns/stream", json={"message": "I sneak"})
 
-        memories.assert_called_once_with(7, ["I sneak", "They spot you."])
+        memories.assert_called_once_with(
+            7, ["I sneak", "They spot you."], known_context(turn.get("memories"))
+        )
 
     def test_returns_404_when_missing(
         self, mock_load, _save, _memories, client, session

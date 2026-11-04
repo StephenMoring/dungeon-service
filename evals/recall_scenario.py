@@ -11,7 +11,8 @@
 4. Deletes the eval rows, unless --keep.
 
 Needs the local database, DUNGEON_ANTHROPIC_API_KEY and VOYAGE_API_KEY. A run with the
-default 25 filler exchanges and 5 probes makes about 40 Claude calls.
+default 25 filler exchanges and 5 probes makes about 40 Claude calls and 65 Voyage
+calls (about 25 minutes with --voyage-rpm 3).
 
     uv run python -m evals.recall_scenario
     uv run python -m evals.recall_scenario --filler 10 --probes 3 --keep
@@ -36,7 +37,7 @@ from src.models.user import User
 from src.services import embedding_service
 from src.services.dm_agent import TextDelta, client, process_turn_stream
 from src.services.embedding_service import extract_and_store_memories
-from src.services.prompts import format_memories
+from src.services.prompts import format_memories, known_context
 from src.services.turn_service import load_turn_context
 
 HERE = Path(__file__).parent
@@ -90,10 +91,14 @@ def create_world(session: Session, scenario: dict) -> Character:
 
 
 def play_scripted(character: Character, exchanges: list[dict], label: str) -> None:
-    """Save each exchange and extract its memories, as a played turn would."""
+    """Save each exchange and extract its memories, as a played turn would: the turn
+    first recalls memories for its player message, and extraction sees them."""
     assert character.id is not None and character.campaign_id is not None
     for i, exchange in enumerate(exchanges, 1):
         with Session(engine) as session:
+            recalled = known_context(
+                load_turn_context(character.id, exchange["player"], session)["memories"]
+            )
             session.add_all(
                 [
                     MessageHistory(
@@ -107,7 +112,7 @@ def play_scripted(character: Character, exchanges: list[dict], label: str) -> No
             )
             session.commit()
         extract_and_store_memories(
-            character.campaign_id, [exchange["player"], exchange["dm"]]
+            character.campaign_id, [exchange["player"], exchange["dm"]], recalled
         )
         print(f"  {label} {i}/{len(exchanges)}", end="\r", flush=True)
     print()

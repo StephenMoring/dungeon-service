@@ -5,13 +5,15 @@ from dataclasses import asdict
 
 from fastapi import BackgroundTasks
 from sqlmodel import Session, col, select
+
 from src.db.db import engine
-from src.models.character import Character
 from src.models.campaign import Campaign, CampaignCheckpoint, Checkpoint
+from src.models.character import Character
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta, process_turn_stream
 from src.services.embedding_service import extract_and_store_memories
 from src.services.memory_service import RetrievedMemories, retrieve_memories
+from src.services.prompts import known_context
 from src.tools.dice_tools import RollResult
 
 logger = logging.getLogger(__name__)
@@ -152,6 +154,9 @@ async def stream_turn(
         return
 
     background_tasks.add_task(
-        extract_and_store_memories, campaign_id, [player_message, dm_message]
+        extract_and_store_memories,
+        campaign_id,
+        [player_message, dm_message],
+        known_context(turn.get("memories")),
     )
     yield sse("done", {"message_id": message_id})
