@@ -39,10 +39,10 @@ flowchart TB
 
   subgraph sys["AI Dungeon Master [Software System]"]
     direction TB
-    web["<b>dungeon-web</b><br/><i>[Container: React, Vite, Tailwind]</i><br/>SPA. Handles the Discord redirect,<br/>streams turns, animates dice"]
+    web["<b>dungeon-web</b><br/><i>[Container: React, Vite, Tailwind; Caddy in production]</i><br/>SPA. Handles the Discord redirect,<br/>streams turns, animates dice.<br/>In production Caddy serves it, terminates<br/>HTTPS and proxies /api (same origin)"]
     api["<b>dungeon-service</b><br/><i>[Container: Python, FastAPI, SQLModel]</i><br/>REST + SSE API: auth, characters,<br/>campaigns, turns, dice checks"]
     db[("<b>PostgreSQL + pgvector</b><br/><i>[Container: Postgres 16]</i><br/>Users, characters, campaigns,<br/>checkpoints, history, memories")]
-    flyway["<b>Flyway</b><br/><i>[Container: Docker]</i><br/>Migrations everywhere,<br/>seeds locally"]
+    flyway["<b>Flyway</b><br/><i>[Container: Docker]</i><br/>Migrations everywhere (schema +<br/>game content), test seeds locally"]
   end
 
   discord["<b>Discord</b><br/><i>[External System]</i>"]

@@ -25,3 +25,6 @@ docs/superpowers/
 
 # Eval run output (inputs, retrieved memories, scores)
 evals/results/
+
+# Production settings and database backups (on the server only)
+infra/prod/backups/

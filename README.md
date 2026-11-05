@@ -107,6 +107,14 @@ make lr-down   # stop and wipe the local db
 
 `make dr` / `make dr-down` run the whole stack, API included, in Docker.
 
+Optional settings: `DB_ECHO=true` logs every SQL statement (players' story text included; off by default), `API_DOCS=false` hides `/docs` and `/openapi.json` (on by default, since the frontend's `generate-types` reads it), `COOKIE_SECURE=false` drops the cookie's Secure flag.
+
+Game content (classes, races, the checkpoints campaigns are built from) is a migration (`V5__game_content.sql`) and loads everywhere. `db/seeds` holds only local test data (`seed_user` and its campaigns) and is never loaded in production.
+
+## Deploying
+
+`infra/prod/` runs the app on one server with Docker Compose: Caddy (HTTPS, the built frontend, `/api` proxy) is the only thing exposed; the API and Postgres have no published ports. [`infra/prod/DEPLOY.md`](./infra/prod/DEPLOY.md) walks through it from buying the domain and hardening the server to backups and updates.
+
 ## Development
 
 ```bash

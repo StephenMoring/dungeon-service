@@ -53,7 +53,7 @@ uv run mypy src
 
 **Database tables**: `user`, `campaign`, `character`, `checkpoint`, `campaigncheckpoint` (ordered checkpoints per campaign with status/summary), `heroclass`, `race`, `messagehistory`, and memory tables `npcmemory`, `locationmemory`, `itemmemory`, `eventmemory` (each with `vector(1024)` + HNSW cosine index)
 
-**Migrations**: `db/migrations/` versioned (`V*`, run everywhere); `db/seeds/` repeatable (`R__`, local only, mounted separately in docker-compose)
+**Migrations**: `db/migrations/` versioned (`V*`, run everywhere; `V5__game_content.sql` holds classes, races and checkpoints); `db/seeds/` repeatable (`R__`, local test data only: `seed_user` and its campaigns, mounted only by the local docker-compose)
 
 ## Testing
 
@@ -67,13 +67,17 @@ uv run mypy src
 
 ## Tech Stack
 
-- Python 3.12+, FastAPI, SQLModel, psycopg2, pgvector
+- Python 3.12+, FastAPI, SQLModel, psycopg2 (named explicitly in `db.py`: SQLAlchemy 2.1 maps bare `postgresql://` to psycopg 3), pgvector
 - Claude model `claude-sonnet-4-5-20250929` is hardcoded in several places in `dm_agent.py`
 - Voyage AI for embeddings; Discord OAuth + PyJWT for auth
 
 ## Environment Variables
 
-All required (loaded in `src/config/config.py`, which raises at import if any are missing): `DUNGEON_ANTHROPIC_API_KEY` (the Claude API key; deliberately not `ANTHROPIC_API_KEY`, which Claude Code itself reads), `VOYAGE_API_KEY`, `DATABASE_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `SECRET_KEY` (at least 32 bytes; `require_secret_key` refuses to start otherwise). docker-compose also needs `POSTGRES_USER` / `POSTGRES_PASSWORD`.
+All required (loaded in `src/config/config.py`, which raises at import if any are missing): `DUNGEON_ANTHROPIC_API_KEY` (the Claude API key; deliberately not `ANTHROPIC_API_KEY`, which Claude Code itself reads), `VOYAGE_API_KEY`, `DATABASE_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `SECRET_KEY` (at least 32 bytes; `require_secret_key` refuses to start otherwise). docker-compose also needs `POSTGRES_USER` / `POSTGRES_PASSWORD`. Optional: `DB_ECHO` (SQL logging, off), `API_DOCS` (on; production sets false), `COOKIE_SECURE` (on).
+
+## Deployment
+
+`infra/prod/` (see `DEPLOY.md`): Compose with Caddy (built from `../dungeon-web`'s Dockerfile and Caddyfile) as the only service with `ports:`; never add `ports:` to `api` or `db` there (Docker's port rules bypass the host firewall). Flyway mounts only `db/migrations`, never `db/seeds`, so anything production needs (like game content) must be a `V*` migration. The `Dockerfile` installs `uv.lock --frozen` without dev tools and runs as a non-root user
 
 ## Gotchas
 
@@ -82,5 +86,4 @@ All required (loaded in `src/config/config.py`, which raises at import if any ar
 - **Session lifecycle**: Don't use `with session:` on a FastAPI-injected session. Background tasks and tool handlers run outside the request, so they open their own `Session(engine)`
 - **`col()` for SQL expressions**: Use `col(Model.field)` for `.not_in()`, `.contains()`, etc.
 - **F821 ruff suppression**: Model files use string forward refs (e.g. `"Campaign"`); F821 is suppressed for `src/models/*.py`
-- **Alembic in deps but unused**: Flyway handles migrations
-- **Typer in deps but unused**: leftover from the original CLI plan
+- **Migrations are Flyway SQL** (`db/migrations/V*`), not Alembic

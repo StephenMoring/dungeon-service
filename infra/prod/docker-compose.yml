@@ -1,0 +1,89 @@
+# Production stack. Run from this folder, with dungeon-web cloned next to
+# dungeon-service:  docker compose up -d --build   (settings come from .env here).
+#
+# Only `web` (Caddy) publishes ports. The API and Postgres have no `ports:`, so they
+# are reachable only from inside this Compose network, never from the internet.
+name: dungeon
+
+services:
+  web:
+    build:
+      context: ../../../dungeon-web
+      args:
+        VITE_DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?set in .env}
+        VITE_DISCORD_REDIRECT_URI: https://${SITE_ADDRESS:?set in .env}/auth/callback
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data # HTTPS certificates: keep across restarts
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build: ../..
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?set in .env}:${POSTGRES_PASSWORD:?set in .env}@db:5432/dungeon
+      DUNGEON_ANTHROPIC_API_KEY: ${DUNGEON_ANTHROPIC_API_KEY:?set in .env}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:?set in .env}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?set in .env}
+      DISCORD_REDIRECT_URI: https://${SITE_ADDRESS}/auth/callback
+      SECRET_KEY: ${SECRET_KEY:?set in .env}
+      COOKIE_SECURE: "true"
+      API_DOCS: "false"
+      DB_ECHO: "false"
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    depends_on:
+      db:
+        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: dungeon
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d dungeon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Applies db/migrations, then exits. Seed data (db/seeds: test users and
+  # characters) is never mounted in production.
+  flyway:
+    image: flyway/flyway:11-alpine
+    command: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/dungeon
+      FLYWAY_USER: ${POSTGRES_USER}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    volumes:
+      - ../../db/migrations:/flyway/sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
