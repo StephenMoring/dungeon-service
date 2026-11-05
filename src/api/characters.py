@@ -31,7 +31,6 @@ character_router = APIRouter(prefix="/characters", tags=["characters"])
 def get_characters(
     session: Session = Depends(get_session), user: User = Depends(get_current_user)
 ):
-    print(f"got user {user}")
     return get_user_characters(session, user)
 
 

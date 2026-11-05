@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import cast
@@ -15,6 +16,8 @@ from src.services.prompts import (
 )
 from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
 from src.tools.dice_tools import RollResult, handle_roll_check, roll_check_tool
+
+logger = logging.getLogger(__name__)
 
 client = Anthropic(api_key=ANTHROPIC_API_KEY)
 async_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
@@ -61,7 +64,10 @@ def create_character(character_description):
         model="claude-sonnet-4-5-20250929",
         output_config={"format": {"type": "json_schema", "schema": CHARACTER_SCHEMA}},
     )
-    print(message)
+    # Metadata only: the content is the player's character.
+    logger.debug(
+        "create_character: stop_reason=%s usage=%s", message.stop_reason, message.usage
+    )
     if message.content and isinstance(message.content[0], TextBlock):
         message_text = message.content[0].text
         return message_text

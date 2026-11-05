@@ -37,7 +37,6 @@ def create_preview(character_description: CharacterDescriptionCreate) -> dict:
 
 
 def get_user_characters(session: Session, user: User):
-    print("fetching user's characters from db")
     statement = (
         select(Character, Campaign)
         .outerjoin(Campaign, col(Character.campaign_id) == Campaign.id)

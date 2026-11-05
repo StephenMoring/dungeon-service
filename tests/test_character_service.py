@@ -40,6 +40,11 @@ class TestCreate:
             description="d",
             age=55,
             strength=7,
+            perception=6,
+            endurance=4,
+            charisma=8,
+            intelligence=10,
+            agility=3,
             luck=5,
         )
 

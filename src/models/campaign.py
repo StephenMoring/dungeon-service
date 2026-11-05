@@ -36,7 +36,7 @@ class CampaignWithDetails(SQLModel):
 
 class CreateCampaignRequest(SQLModel):
     character_id: int
-    description: str
+    description: str = Field(min_length=1, max_length=2000)
 
 
 class CreateCampaignResponse(SQLModel):

@@ -41,7 +41,6 @@ search_checkpoints_tool: ToolParam = {
 
 
 def handle_search_checkpoints(session, tags: str, limit: int = 10):
-    print("In handle_search_checkpoints")
     with session:
         query = select(Checkpoint)
 
@@ -54,7 +53,6 @@ def handle_search_checkpoints(session, tags: str, limit: int = 10):
         query = query.limit(limit)
         results = session.exec(query)
 
-        print(results)
         return [
             {
                 "id": cp.id,

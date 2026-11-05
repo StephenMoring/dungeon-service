@@ -11,24 +11,37 @@ class CharacterBase(SQLModel):
     age: int
 
 
-class CharacterCreate(CharacterBase):
+# Limits on player input: names and descriptions end up in Claude prompts, so a cap
+# keeps one request from costing more than play needs.
+NAME = Field(min_length=1, max_length=60)
+LABEL = Field(min_length=1, max_length=40)  # class, race
+DESCRIPTION = Field(min_length=1, max_length=2000)
+STAT = Field(ge=1, le=10)  # the 1-10 scale roll_check adds to a d20
+
+
+class CharacterCreate(SQLModel):
     """What a player may set when saving a character. No id, user_id or campaign_id:
     the server assigns the owner, and only campaign creation puts a character in one."""
 
-    strength: int | None = None
-    perception: int | None = None
-    endurance: int | None = None
-    charisma: int | None = None
-    intelligence: int | None = None
-    agility: int | None = None
-    luck: int | None = None
+    name: str = NAME
+    hero_class: str = LABEL
+    biography: str = Field(min_length=1, max_length=4000)
+    description: str = DESCRIPTION
+    age: int = Field(ge=1, le=1000)
+    strength: int = STAT
+    perception: int = STAT
+    endurance: int = STAT
+    charisma: int = STAT
+    intelligence: int = STAT
+    agility: int = STAT
+    luck: int = STAT
 
 
 class CharacterDescriptionCreate(SQLModel):
-    name: str
-    description: str
-    hero_class: str
-    race: str
+    name: str = NAME
+    description: str = DESCRIPTION
+    hero_class: str = LABEL
+    race: str = LABEL
 
 
 # TODO: add inventory, status
