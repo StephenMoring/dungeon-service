@@ -31,46 +31,54 @@ def _public(user: User) -> UserPublic:
 async def discord_callback(
     code: CallBackCode, response: Response, session: Session = Depends(get_session)
 ) -> dict[str, UserPublic]:
-    async with httpx.AsyncClient() as client:  # type: ignore[reportGeneralTypeIssues]
-        token_response = await client.post(
-            "https://discord.com/api/oauth2/token",
-            data={
-                "client_id": DISCORD_CLIENT_ID,
-                "client_secret": DISCORD_CLIENT_SECRET,
-                "grant_type": "authorization_code",
-                "code": code.code,
-                "redirect_uri": DISCORD_REDIRECT_URI,
-            },
-        )
-        if token_response.status_code != 200:
-            raise HTTPException(
-                status_code=400, detail="Invalid or expired Discord code"
+    try:
+        async with httpx.AsyncClient() as client:  # type: ignore[reportGeneralTypeIssues]
+            token_response = await client.post(
+                "https://discord.com/api/oauth2/token",
+                data={
+                    "client_id": DISCORD_CLIENT_ID,
+                    "client_secret": DISCORD_CLIENT_SECRET,
+                    "grant_type": "authorization_code",
+                    "code": code.code,
+                    "redirect_uri": DISCORD_REDIRECT_URI,
+                },
+            )
+            if token_response.status_code != 200:
+                raise HTTPException(
+                    status_code=400, detail="Invalid or expired Discord code"
+                )
+
+            access_token = token_response.json()["access_token"]
+
+            user_response = await client.get(
+                "https://discord.com/api/users/@me",
+                headers={"Authorization": f"Bearer {access_token}"},
             )
 
-        access_token = token_response.json()["access_token"]
-
-        user_response = await client.get(
-            "https://discord.com/api/users/@me",
-            headers={"Authorization": f"Bearer {access_token}"},
+            if user_response.status_code != 200:
+                raise HTTPException(
+                    status_code=400, detail="Failed to fetch discord user"
+                )
+            discord_user = user_response.json()
+    except httpx.HTTPError:
+        # Network failure talking to Discord (not a bad code, which Discord answers).
+        raise HTTPException(
+            status_code=502, detail="Couldn't reach Discord. Try again."
         )
 
-        if user_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to fetch discord user")
+    user = add_user(discord_user, session)
 
-        discord_user = user_response.json()
-        user = add_user(discord_user, session)
-
-        # The token never reaches page JavaScript: only the browser holds it.
-        response.set_cookie(
-            SESSION_COOKIE,
-            create_jwt(user),
-            max_age=SESSION_DAYS * 24 * 3600,
-            httponly=True,
-            secure=COOKIE_SECURE,
-            samesite="lax",
-            path="/",
-        )
-        return {"user": _public(user)}
+    # The token never reaches page JavaScript: only the browser holds it.
+    response.set_cookie(
+        SESSION_COOKIE,
+        create_jwt(user),
+        max_age=SESSION_DAYS * 24 * 3600,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+    return {"user": _public(user)}
 
 
 @auth_router.get("/me")

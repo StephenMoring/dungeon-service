@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import jwt
 import pytest
 
@@ -188,6 +189,22 @@ class TestDiscordCallback:
 
         assert "jwt" not in body
         assert body["user"] == {"id": 7, "username": "wren", "avatar_url": "a.png"}
+
+    def test_discord_unreachable_is_a_502_not_a_crash(self, anon_client):
+        http = MagicMock()
+        http.post = AsyncMock(side_effect=httpx.ConnectError("no route to discord.com"))
+        client_cls = MagicMock()
+        client_cls.return_value.__aenter__ = AsyncMock(return_value=http)
+        client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.api.auth.httpx.AsyncClient", client_cls):
+            response = anon_client.post(
+                "/auth/discord/callback", json={"code": "c"}, headers=CSRF
+            )
+
+        assert response.status_code == 502
+        assert response.json()["detail"] == "Couldn't reach Discord. Try again."
+        assert "set-cookie" not in response.headers
 
     def test_bad_code_sets_no_cookie(self, anon_client):
         with discord(token_status=400):
