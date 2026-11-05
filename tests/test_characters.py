@@ -5,6 +5,7 @@ from src.models.character import HeroClass, Race
 from src.models.message_history import MessageHistory
 from src.services.dm_agent import TextDelta
 from src.services.prompts import known_context
+from src.services.character_service import InvalidPreview
 from src.services.usage_service import RateLimited
 from src.tools.dice_tools import RollResult
 from tests.conftest import make_character
@@ -45,50 +46,54 @@ class TestListCharacters:
 
 
 class TestCreateCharacter:
-    @patch("src.api.characters.create")
-    def test_returns_201_with_character(self, mock_create, client, user):
-        mock_create.return_value = make_character()
+    @patch("src.api.characters.create_from_preview")
+    def test_saves_the_signed_preview(self, create, client, session, user):
+        create.return_value = make_character()
 
-        response = client.post("/characters/", json=CHARACTER_BODY)
+        response = client.post("/characters/", json={"preview_token": "signed"})
 
         assert response.status_code == 201
         assert response.json()["name"] == "Gandalf"
-        assert mock_create.call_args.args[2] is user
+        create.assert_called_once_with("signed", session, user)
 
-    @patch("src.api.characters.create")
-    def test_ignores_ownership_fields_in_the_body(self, mock_create, client):
-        # A client must not pick its character's id, owner or campaign: setting
-        # campaign_id let a player join (and read) another player's campaign.
-        mock_create.return_value = make_character()
-        body = {**CHARACTER_BODY, "id": 5, "user_id": 999, "campaign_id": 1}
+    @patch("src.api.characters.create_from_preview")
+    def test_stats_in_the_body_are_ignored(self, create, client):
+        # Stats come only from the server-signed preview, never from the client.
+        create.return_value = make_character()
 
-        client.post("/characters/", json=body)
+        client.post("/characters/", json={"preview_token": "signed", **CHARACTER_BODY})
 
-        sent = mock_create.call_args.args[0].model_dump()
-        assert "id" not in sent
-        assert "user_id" not in sent
-        assert "campaign_id" not in sent
-        assert sent["strength"] == 7
+        assert create.call_args.args[0] == "signed"
+        assert len(create.call_args.args) == 3
 
-    @patch("src.api.characters.create")
-    def test_returns_502_when_service_fails(self, mock_create, client):
-        mock_create.side_effect = ValueError("save failed")
+    def test_requires_a_preview_token(self, client):
+        assert client.post("/characters/", json=CHARACTER_BODY).status_code == 422
 
-        response = client.post("/characters/", json=CHARACTER_BODY)
+    @patch(
+        "src.api.characters.create_from_preview",
+        side_effect=InvalidPreview(
+            "This character preview expired. Generate it again."
+        ),
+    )
+    def test_bad_preview_is_a_400_with_the_reason(self, _create, client):
+        response = client.post("/characters/", json={"preview_token": "old"})
 
-        assert response.status_code == 502
-        assert response.json()["detail"] == "save failed"
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "This character preview expired. Generate it again."
+        )
 
 
 class TestCharacterPreview:
     @patch("src.api.characters.create_preview")
-    def test_returns_generated_sheet(self, mock_preview, client):
-        mock_preview.return_value = {"age": 24, "agility": 9}
+    def test_returns_generated_sheet(self, mock_preview, client, user):
+        mock_preview.return_value = {"age": 24, "agility": 9, "preview_token": "t"}
 
         response = client.post("/characters/preview", json=PREVIEW_BODY)
 
         assert response.status_code == 201
-        assert response.json() == {"age": 24, "agility": 9}
+        assert response.json() == {"age": 24, "agility": 9, "preview_token": "t"}
+        assert mock_preview.call_args.args[1] is user
 
     def test_requires_all_fields(self, client):
         response = client.post("/characters/preview", json={"name": "Kael"})

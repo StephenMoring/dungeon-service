@@ -5,8 +5,8 @@ from src.api.dependencies import enforce_limit, get_current_user
 from src.db.db import get_session
 from src.models.character import (
     Character,
-    CharacterCreate,
     CharacterDescriptionCreate,
+    CharacterSaveRequest,
     HeroClass,
     Race,
 )
@@ -14,7 +14,8 @@ from src.models.message_history import MessageHistory
 from src.models.turn import TurnRequest
 from src.models.user import User
 from src.services.character_service import (
-    create,
+    InvalidPreview,
+    create_from_preview,
     create_preview,
     get_all_races,
     get_character_turns,
@@ -36,14 +37,14 @@ def get_characters(
 
 @character_router.post("/", status_code=201)
 def create_character(
-    character: CharacterCreate,
+    request: CharacterSaveRequest,
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
     try:
-        return create(character, session, user)
-    except ValueError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        return create_from_preview(request.preview_token, session, user)
+    except InvalidPreview as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @character_router.post("/preview", status_code=201)
@@ -54,7 +55,7 @@ def create_character_preview(
 ):
     enforce_limit(session, user, "preview")
     try:
-        return create_preview(character_description)
+        return create_preview(character_description, user)
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

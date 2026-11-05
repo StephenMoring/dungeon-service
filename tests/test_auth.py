@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -6,7 +7,9 @@ import jwt
 import pytest
 
 from src.config import SECRET_KEY
+from src.models.character import CharacterDescriptionCreate
 from src.models.user import User
+from src.services.character_service import create_preview
 from src.services.auth_service import (
     SESSION_COOKIE,
     SESSION_DAYS,
@@ -95,6 +98,37 @@ class TestSessionCookie:
 
         assert response.status_code == 401
         assert response.json()["detail"] == "Session ended"
+
+    def test_a_character_preview_token_is_not_a_session(
+        self, anon_client, session, user
+    ):
+        session.get.return_value = user
+        with patch("src.services.character_service.create_character") as llm:
+            llm.return_value = json.dumps(
+                {
+                    "age": 1,
+                    "biography": "b",
+                    "strength": 1,
+                    "perception": 1,
+                    "endurance": 1,
+                    "charisma": 1,
+                    "intelligence": 1,
+                    "agility": 1,
+                    "luck": 1,
+                }
+            )
+            preview = create_preview(
+                CharacterDescriptionCreate(
+                    name="n", description="d", hero_class="c", race="r"
+                ),
+                user,
+            )
+
+        response = anon_client.get(
+            "/campaigns/", headers=session_cookie(preview["preview_token"])
+        )
+
+        assert response.status_code == 401
 
     def test_valid_cookie_is_accepted(self, anon_client, session, user):
         session.get.return_value = user
