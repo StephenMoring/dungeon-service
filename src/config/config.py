@@ -4,6 +4,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def flag(value: str | None) -> bool:
+    """An on/off setting from the environment: on for "true" or "1", off otherwise."""
+    return (value or "").strip().lower() in ("true", "1")
+
+
 def require_secret_key(key: str) -> str:
     """SECRET_KEY signs sessions and character previews (HS256). A short key can be
     brute-forced, which would let anyone sign in as any player, so refuse to start."""
@@ -25,3 +30,5 @@ VOYAGE_API_KEY = os.environ["VOYAGE_API_KEY"]
 # The session cookie is Secure unless this is "false" (browsers accept Secure cookies
 # on http://localhost, so local development does not need it).
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() != "false"
+# Log every SQL statement (players' story text included). Off unless set: local debugging.
+DB_ECHO = flag(os.environ.get("DB_ECHO"))
