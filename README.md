@@ -56,8 +56,8 @@ All routes except `/health` and `/auth/discord/callback` need the `dungeon_sessi
 | GET | `/auth/me` | The signed-in user (`id`, `username`, `avatar_url`) |
 | POST | `/auth/logout` | End every session for the user and clear the cookie |
 | GET | `/characters/` | Your characters, each with its campaign |
-| POST | `/characters/` | Save a character (name, class, biography, description, age, stats; the server sets the owner, and only campaign creation puts a character in a campaign) |
-| POST | `/characters/preview` | Generate a character sheet without saving |
+| POST | `/characters/` | Save a character: send `{preview_token}` from `/characters/preview`; the server saves the sheet it generated and signed (stats are never chosen by the client), sets the owner, and only campaign creation puts a character in a campaign |
+| POST | `/characters/preview` | Generate a character sheet without saving, with a `preview_token` (signed for you, valid 1 hour) to save it |
 | GET | `/characters/classes` | List classes |
 | GET | `/characters/races` | List races |
 | GET | `/characters/{id}` | One of your characters |
@@ -95,7 +95,7 @@ DISCORD_REDIRECT_URI=
 SECRET_KEY=
 ```
 
-All of these are required; the app fails at startup if any is missing. Optional: `COOKIE_SECURE=false` drops the cookie's Secure flag (not needed for `http://localhost`, which browsers treat as secure). If the frontend is ever served from a different site than the API, the cookie and CORS settings must change (today the frontend proxies `/api` so both are same-origin). The Claude key is named `DUNGEON_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`, so it doesn't clash with Claude Code, which reads that name itself. Use a `SECRET_KEY` of at least 32 bytes.
+All of these are required; the app fails at startup if any is missing. Optional: `COOKIE_SECURE=false` drops the cookie's Secure flag (not needed for `http://localhost`, which browsers treat as secure). If the frontend is ever served from a different site than the API, the cookie and CORS settings must change (today the frontend proxies `/api` so both are same-origin). The Claude key is named `DUNGEON_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`, so it doesn't clash with Claude Code, which reads that name itself. `SECRET_KEY` must be at least 32 bytes (the app refuses to start otherwise): `python3 -c 'import secrets; print(secrets.token_hex(32))'`.
 
 Then:
 
