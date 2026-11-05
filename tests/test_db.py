@@ -24,3 +24,17 @@ def test_uses_the_installed_psycopg2_driver(url):
 def test_sql_logging_is_off_unless_turned_on(value, expected):
     # SQL logging writes every query, players' story text included, to the logs.
     assert flag(value) is expected
+
+
+def test_api_docs_can_be_turned_off(monkeypatch):
+    # Production sets API_DOCS=false so /docs and /openapi.json aren't public.
+    from fastapi.testclient import TestClient
+
+    import src.main as main
+
+    off = main.create_app(api_docs=False)
+    on = main.create_app(api_docs=True)
+
+    assert TestClient(off).get("/openapi.json").status_code == 404
+    assert TestClient(off).get("/docs").status_code == 404
+    assert TestClient(on).get("/openapi.json").status_code == 200

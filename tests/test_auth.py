@@ -148,7 +148,8 @@ class TestSessionCookie:
 
 class TestCsrfHeader:
     """Requests that change data must carry X-Requested-With. Another site can't set
-    a custom header on a cross-site request without a CORS preflight we refuse."""
+    a custom header on a cross-site request without a CORS preflight, and the API
+    allows no other origin."""
 
     @pytest.mark.parametrize("value", ["", "evil-site"])
     def test_unsafe_request_without_header_is_refused(self, client, value):

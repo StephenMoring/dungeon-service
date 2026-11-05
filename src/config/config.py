@@ -32,3 +32,6 @@ VOYAGE_API_KEY = os.environ["VOYAGE_API_KEY"]
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() != "false"
 # Log every SQL statement (players' story text included). Off unless set: local debugging.
 DB_ECHO = flag(os.environ.get("DB_ECHO"))
+# Serve /docs and /openapi.json. On by default for development (the frontend's
+# generate-types script reads /openapi.json); production sets API_DOCS=false.
+API_DOCS = flag(os.environ.get("API_DOCS", "true"))
