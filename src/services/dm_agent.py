@@ -13,8 +13,10 @@ from src.services.prompts import (
     build_turn_system_prompt,
     campaign_creation_prompt,
     character_creation_prompt,
+    combat_round_section,
 )
 from src.tools.campaign_tools import handle_search_checkpoints, search_checkpoints_tool
+from src.tools.combat_tools import EncounterPlan, plan_encounter, start_encounter_tool
 from src.tools.dice_tools import RollResult, handle_roll_check, roll_check_tool
 
 logger = logging.getLogger(__name__)
@@ -228,32 +230,36 @@ class TextDelta:
     text: str
 
 
+def _history(turn: dict) -> list[MessageParam]:
+    messages: list[MessageParam] = [
+        {"role": msg.role, "content": msg.content} for msg in turn["recent_messages"]
+    ]
+    messages.append({"role": "user", "content": turn["message"]})
+    return messages
+
+
 async def process_turn_stream(
     turn: dict,
-) -> AsyncGenerator[TextDelta | RollResult, None]:
-    """Stream a DM turn. Claude may call roll_check once; the server rolls and the
-    reply continues with tools disabled."""
+) -> AsyncGenerator[TextDelta | RollResult | EncounterPlan, None]:
+    """Stream a DM turn. Claude may call one tool: roll_check (the server rolls) or
+    start_encounter (yields the EncounterPlan for turn_service to save). The reply
+    then continues with tools disabled."""
     character = turn["character"]
-    campaign = turn["campaign"]
-    checkpoint = turn["current_checkpoint"]
-    recent_messages = turn["recent_messages"]
-    player_message = turn["message"]
-
+    bestiary = turn.get("bestiary") or []
     system_prompt = build_turn_system_prompt(
-        campaign, character, checkpoint, turn.get("memories")
+        turn["campaign"], character, turn["current_checkpoint"], turn.get("memories")
     )
-
-    messages: list[MessageParam] = [
-        {"role": msg.role, "content": msg.content} for msg in recent_messages
-    ]
-    messages.append({"role": "user", "content": player_message})
+    messages = _history(turn)
+    tools = [roll_check_tool]
+    if bestiary:
+        tools.append(start_encounter_tool(bestiary))
 
     async with async_client.messages.stream(
         model="claude-sonnet-4-5-20250929",
         max_tokens=1024,
         system=system_prompt,
         messages=messages,
-        tools=[roll_check_tool],
+        tools=tools,
         tool_choice={"type": "auto", "disable_parallel_tool_use": True},
     ) as stream:
         wrote_setup = False
@@ -267,14 +273,20 @@ async def process_turn_stream(
         return
 
     tool_use = next(b for b in final.content if isinstance(b, ToolUseBlock))
-    if tool_use.name != "roll_check":
-        raise ValueError(f"Unexpected tool call: {tool_use.name}")
-
     tool_input = cast(dict, tool_use.input)
-    roll = handle_roll_check(
-        character, tool_input["stat"], tool_input["difficulty"], tool_input["reason"]
-    )
-    yield roll
+    result: RollResult | EncounterPlan
+    if tool_use.name == "roll_check":
+        result = handle_roll_check(
+            character,
+            tool_input["stat"],
+            tool_input["difficulty"],
+            tool_input["reason"],
+        )
+    elif tool_use.name == "start_encounter":
+        result = plan_encounter(bestiary, tool_input)
+    else:
+        raise ValueError(f"Unexpected tool call: {tool_use.name}")
+    yield result
     if wrote_setup:
         # Setup text rarely ends with whitespace; keep it apart from the outcome.
         yield TextDelta("\n\n")
@@ -287,7 +299,7 @@ async def process_turn_stream(
                 {
                     "type": "tool_result",
                     "tool_use_id": tool_use.id,
-                    "content": roll.to_tool_result(),
+                    "content": result.to_tool_result(),
                 }
             ],
         }
@@ -298,8 +310,37 @@ async def process_turn_stream(
         max_tokens=1024,
         system=system_prompt,
         messages=messages,
-        tools=[roll_check_tool],
+        tools=tools,
         tool_choice={"type": "none"},
+    ) as stream:
+        async for event in stream:
+            if event.type == "text":
+                yield TextDelta(event.text)
+
+
+async def narrate_round_stream(
+    turn: dict, round_result, state: dict
+) -> AsyncGenerator[TextDelta, None]:
+    """Stream the DM's narration of a combat round the server already resolved.
+    One request, no tools. The resolved round rides in the player's message, not
+    the system prompt: placed last, it outweighs a conversation that doesn't match
+    it (e.g. the DM wrote nothing yet about the blow that kills the character)."""
+    system_prompt = build_turn_system_prompt(
+        turn["campaign"],
+        turn["character"],
+        turn["current_checkpoint"],
+        turn.get("memories"),
+    )
+    messages = _history(turn)
+    messages[-1] = {
+        "role": "user",
+        "content": f"{turn['message']}\n\n{combat_round_section(round_result, state)}",
+    }
+    async with async_client.messages.stream(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=512,
+        system=system_prompt,
+        messages=messages,
     ) as stream:
         async for event in stream:
             if event.type == "text":

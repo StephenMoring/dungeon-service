@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from src.models.campaign import Campaign
@@ -7,6 +8,7 @@ from src.services.dm_agent import TextDelta
 from src.services.prompts import known_context
 from src.services.character_service import InvalidPreview
 from src.services.usage_service import RateLimited
+from src.services.turn_service import SavedTurn
 from src.tools.dice_tools import RollResult
 from tests.conftest import make_character
 
@@ -199,7 +201,7 @@ def turn_context():
 
 
 @patch("src.services.turn_service.extract_and_store_memories")
-@patch("src.services.turn_service.save_turn", return_value=99)
+@patch("src.services.turn_service.save_turn", return_value=SavedTurn(99))
 @patch("src.services.turn_service.process_turn_stream", fake_dm)
 @patch("src.api.characters.load_turn_context")
 class TestPlayTurnStream:
@@ -307,3 +309,187 @@ class TestClaudeRateLimits:
         session.get.return_value = make_character()
         client.post("/characters/1/turns/stream", json={"message": "hi"})
         check.assert_called_once_with(session, user, "turn")
+
+
+class TestTurnsDuringAndAfterAFight:
+    @patch("src.api.characters.load_turn_context")
+    def test_free_text_turns_wait_until_the_fight_ends(self, load, client, session):
+        session.get.return_value = make_character()
+        with patch("src.api.characters.active_encounter", return_value=object()):
+            response = client.post(
+                "/characters/1/turns/stream", json={"message": "I talk"}
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "You're in a fight. Choose a combat action."
+        load.assert_not_called()
+
+    @patch("src.api.characters.load_turn_context")
+    def test_the_dead_take_no_turns(self, load, client, session):
+        session.get.return_value = make_character(died_at=datetime.now(UTC))
+
+        response = client.post("/characters/1/turns/stream", json={"message": "hi"})
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Gandalf has died. Their story is over."
+        load.assert_not_called()
+
+
+ROUND_STATE = {"id": 5, "status": "active", "round": 1, "enemies": [], "player": {}}
+
+
+def combat_round():
+    from src.services.combat_service import RoundResult
+
+    return RoundResult(round=1, action="defend", character="Gandalf", defended=True)
+
+
+async def fake_narration(_turn, _round, _state):
+    yield TextDelta("You brace.")
+
+
+@patch("src.services.turn_service.extract_and_store_memories")
+@patch("src.services.turn_service.save_turn", return_value=SavedTurn(99))
+@patch("src.services.turn_service.narrate_round_stream", fake_narration)
+@patch("src.api.characters.load_turn_context")
+@patch("src.api.characters.play_round")
+class TestCombatRoundRoute:
+    def in_a_fight(self):
+        return patch("src.api.characters.active_encounter", return_value=object())
+
+    def test_resolves_then_streams_the_round(
+        self, play, load, _save, _memories, client, session
+    ):
+        character = make_character()
+        session.get.return_value = character
+        play.return_value = (combat_round(), ROUND_STATE)
+        load.return_value = turn_context()
+
+        with self.in_a_fight():
+            response = client.post(
+                "/characters/1/combat/stream", json={"action": "defend"}
+            )
+
+        assert response.status_code == 200
+        body = response.text
+        assert body.index("event: round") < body.index("event: combat")
+        assert body.index("event: combat") < body.index("event: text")
+        assert play.call_args.args[1] is character
+        assert play.call_args.args[3:] == ("defend", None)
+        load.assert_called_once_with(1, "I raise my guard and defend.", session)
+
+    def test_passes_the_target(self, play, load, _save, _memories, client, session):
+        session.get.return_value = make_character()
+        play.return_value = (combat_round(), ROUND_STATE)
+        load.return_value = turn_context()
+
+        with self.in_a_fight():
+            client.post(
+                "/characters/1/combat/stream",
+                json={"action": "attack", "target_id": 12},
+            )
+
+        assert play.call_args.args[3:] == ("attack", 12)
+
+    def test_unknown_action_is_rejected(
+        self, play, _load, _save, _memories, client, session
+    ):
+        session.get.return_value = make_character()
+
+        with self.in_a_fight():
+            response = client.post(
+                "/characters/1/combat/stream", json={"action": "cast fireball"}
+            )
+
+        assert response.status_code == 422
+        play.assert_not_called()
+
+    def test_no_fight_is_a_409(self, play, _load, _save, _memories, client, session):
+        session.get.return_value = make_character()
+
+        response = client.post("/characters/1/combat/stream", json={"action": "flee"})
+
+        assert response.status_code == 409
+        play.assert_not_called()
+
+    def test_bad_target_is_a_400(self, play, _load, _save, _memories, client, session):
+        from src.services.combat_service import InvalidTarget
+
+        session.get.return_value = make_character()
+        play.side_effect = InvalidTarget("That enemy isn't standing in this fight.")
+
+        with self.in_a_fight():
+            response = client.post(
+                "/characters/1/combat/stream",
+                json={"action": "attack", "target_id": 999},
+            )
+
+        assert response.status_code == 400
+
+    def test_another_players_character_is_a_403(
+        self, play, _load, _save, _memories, client, session
+    ):
+        session.get.return_value = make_character(user_id=2)
+
+        response = client.post("/characters/1/combat/stream", json={"action": "flee"})
+
+        assert response.status_code == 403
+        play.assert_not_called()
+
+    def test_the_dead_cannot_fight(
+        self, play, _load, _save, _memories, client, session
+    ):
+        session.get.return_value = make_character(died_at=datetime.now(UTC))
+
+        with self.in_a_fight():
+            response = client.post(
+                "/characters/1/combat/stream", json={"action": "attack"}
+            )
+
+        assert response.status_code == 409
+        play.assert_not_called()
+
+    def test_counts_against_the_turn_limit(
+        self, play, _load, _save, _memories, client, session, user
+    ):
+        from src.services.usage_service import RateLimited
+
+        session.get.return_value = make_character()
+        with (
+            self.in_a_fight(),
+            patch(
+                "src.api.dependencies.check_and_record",
+                side_effect=RateLimited(30, "Too many turns"),
+            ) as check,
+        ):
+            response = client.post(
+                "/characters/1/combat/stream", json={"action": "defend"}
+            )
+
+        assert response.status_code == 429
+        check.assert_called_once_with(session, user, "turn")
+        play.assert_not_called()
+
+
+class TestGetEncounter:
+    @patch("src.api.characters.load_bestiary", return_value=[])
+    @patch("src.api.characters.current_state", return_value=ROUND_STATE)
+    def test_returns_the_active_fight(self, _state, _bestiary, client, session):
+        session.get.return_value = make_character()
+
+        assert client.get("/characters/1/encounter").json() == ROUND_STATE
+
+    @patch("src.api.characters.load_bestiary", return_value=[])
+    @patch("src.api.characters.current_state", return_value=None)
+    def test_null_when_not_fighting(self, _state, _bestiary, client, session):
+        session.get.return_value = make_character()
+
+        response = client.get("/characters/1/encounter")
+
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_another_players_character_is_a_403(self, client, session):
+        session.get.return_value = make_character(user_id=2)
+
+        assert client.get("/characters/1/encounter").status_code == 403

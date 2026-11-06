@@ -139,6 +139,21 @@ class TestCampaignServiceCreate:
         session.add.assert_not_called()
 
 
+class TestDeadCharacters:
+    @patch("src.services.campaign_service.create_campaign")
+    def test_a_dead_character_cannot_start_a_campaign(self, mock_create_campaign, user):
+        from datetime import UTC, datetime
+
+        from src.services.campaign_service import DeadCharacter
+
+        session = make_session(make_character(died_at=datetime.now(UTC)))
+
+        with pytest.raises(DeadCharacter, match="has died"):
+            create(REQUEST, session, user)
+
+        mock_create_campaign.assert_not_called()
+
+
 class TestDeleteForUser:
     def owned(self, *characters):
         session = MagicMock()
@@ -170,6 +185,7 @@ class TestDeleteForUser:
             "itemmemory",
             "eventmemory",
             "messagehistory",
+            "encounter",
             "campaigncheckpoint",
         ):
             assert f"DELETE FROM {table} WHERE {table}.campaign_id = 3" in statements

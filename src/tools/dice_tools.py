@@ -66,6 +66,11 @@ def roll_d20() -> int:
     return random.randint(1, 20)
 
 
+def roll_die(sides: int) -> int:
+    """One damage die. Patch point for tests, like roll_d20."""
+    return random.randint(1, sides)
+
+
 def handle_roll_check(
     character: Character, stat: str, difficulty: str, reason: str
 ) -> RollResult:

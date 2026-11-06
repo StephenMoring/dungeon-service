@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from sqlmodel import Field, Relationship, SQLModel
@@ -52,7 +53,7 @@ class CharacterDescriptionCreate(SQLModel):
     race: str = LABEL
 
 
-# TODO: add inventory, status
+# TODO: add inventory
 class Character(CharacterBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     campaign_id: int | None = Field(default=None, foreign_key="campaign.id")
@@ -70,6 +71,11 @@ class Character(CharacterBase, table=True):
     intelligence: int | None
     agility: int | None
     luck: int | None
+    # Hit points: max_hp from endurance (combat_service.max_hp_for). At 0 the
+    # character is dead for good: died_at is set and the row is kept.
+    max_hp: int = 20
+    current_hp: int = 20
+    died_at: datetime | None = None
 
 
 class HeroClass(SQLModel, table=True):

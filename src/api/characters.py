@@ -10,6 +10,7 @@ from src.models.character import (
     HeroClass,
     Race,
 )
+from src.models.combat import CombatActionRequest
 from src.models.message_history import MessageHistory
 from src.models.turn import TurnRequest
 from src.models.user import User
@@ -22,7 +23,20 @@ from src.services.character_service import (
     get_hero_classes,
     get_user_characters,
 )
-from src.services.turn_service import load_turn_context, stream_turn
+from src.services.combat_service import (
+    InvalidTarget,
+    NoActiveEncounter,
+    active_encounter,
+    current_state,
+    describe_action,
+    load_bestiary,
+    play_round,
+)
+from src.services.turn_service import (
+    load_turn_context,
+    stream_combat_round,
+    stream_turn,
+)
 from collections.abc import Sequence
 
 character_router = APIRouter(prefix="/characters", tags=["characters"])
@@ -110,11 +124,12 @@ def play_turn_stream(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ) -> StreamingResponse:
-    character = session.get(Character, id)
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
-    if character.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    character = owned_character(id, session, user)
+    refuse_if_dead(character)
+    if active_encounter(session, id):
+        raise HTTPException(
+            status_code=409, detail="You're in a fight. Choose a combat action."
+        )
     enforce_limit(session, user, "turn")
     try:
         turn = load_turn_context(id, turn_request.message, session)
@@ -122,4 +137,65 @@ def play_turn_stream(
         raise HTTPException(status_code=502, detail=str(e))
     return StreamingResponse(
         stream_turn(turn, background_tasks), media_type="text/event-stream"
+    )
+
+
+def owned_character(id: int, session: Session, user: User) -> Character:
+    character = session.get(Character, id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    if character.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return character
+
+
+def refuse_if_dead(character: Character) -> None:
+    if character.died_at is not None:
+        raise HTTPException(
+            status_code=409, detail=f"{character.name} has died. Their story is over."
+        )
+
+
+@character_router.get("/{id}/encounter")
+def get_encounter(
+    id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict | None:
+    """The character's active fight, or null."""
+    character = owned_character(id, session, user)
+    return current_state(session, character, load_bestiary(session))
+
+
+@character_router.post("/{id}/combat/stream")
+def play_combat_round(
+    id: int,
+    request: CombatActionRequest,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    """One combat round: the server rolls and applies it (committed before the DM
+    narrates), then streams `round`, `combat`, `text` and `done`."""
+    character = owned_character(id, session, user)
+    refuse_if_dead(character)
+    if not active_encounter(session, id):
+        raise HTTPException(status_code=409, detail="There's no fight going on.")
+    enforce_limit(session, user, "turn")
+    bestiary = load_bestiary(session)
+    try:
+        result, state = play_round(
+            session, character, bestiary, request.action, request.target_id
+        )
+    except NoActiveEncounter as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except InvalidTarget as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        turn = load_turn_context(id, describe_action(result), session)
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return StreamingResponse(
+        stream_combat_round(turn, result, state, background_tasks),
+        media_type="text/event-stream",
     )

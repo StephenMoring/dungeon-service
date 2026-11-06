@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from src.services.combat_service import Attack, RoundResult
     from src.services.memory_service import RetrievedMemories
 
 master_system_prompt = """You are an AI Dungeon Master for a narrative focused RPG. You bring stories to life with vivid descriptions, memorable npcs, and player-driven adventures.
@@ -34,6 +35,12 @@ You have a `roll_check` tool. The server rolls a d20, adds the character's stat,
 - Call the tool before you narrate the outcome. Do not describe success or failure until the result comes back.
 - The result is final. A failure is a failure, with real consequences in the story. Never soften it or turn it into a success.
 - Do not repeat the numbers in your narration; the player already sees the roll.
+
+## Combat
+You have a `start_encounter` tool. Call it the moment a fight breaks out: enemies attack, or the player attacks someone hostile. Pick 1-4 enemies from its bestiary that fit the scene and its danger; bosses only for climaxes.
+- Never use `roll_check` for attacks; the server runs every fight round by round, with hit points, and death is permanent.
+- In the reply where you start a fight, describe the enemies and the moment before the clash. Do not narrate a single blow, hit, miss or injury. End by asking what the player does.
+- Give the player a chance to avoid a fight they could reasonably avoid (talking, sneaking, running) before you start one.
 
 ## Character Stat Reference
 Characters have seven attributes (1-10 scale, 5 is average)
@@ -197,6 +204,7 @@ def build_turn_system_prompt(
 **{character.name}** — {character.hero_class}, age {character.age}
 {character.biography}
 
+**Health**: {character.current_hp}/{character.max_hp} HP
 **Stats**: STR {character.strength} | PER {character.perception} | END {character.endurance} | CHA {character.charisma} | INT {character.intelligence} | AGI {character.agility} | LCK {character.luck}
 {checkpoint_section}
 {format_memories(memories) if memories else ""}"""
@@ -298,3 +306,64 @@ Player: {player_message}
 
 DM: {dm_message}
 """
+
+
+def _condition(hp: int, max_hp: int) -> str:
+    if hp <= 0:
+        return "down"
+    if hp * 3 <= max_hp:
+        return "badly wounded"
+    if hp < max_hp:
+        return "wounded"
+    return "unhurt"
+
+
+def _blow(attack: "Attack") -> str:
+    if not attack.hit:
+        return f"{attack.attacker} attacks {attack.target} and misses."
+    how = "lands a critical hit on" if attack.crit else "hits"
+    fell = " and drops them" if attack.target_hp == 0 else ""
+    return f"{attack.attacker} {how} {attack.target} for {attack.damage} damage{fell}."
+
+
+def combat_round_section(result: "RoundResult", state: dict) -> str:
+    """The resolved round for the DM to narrate. The server has already applied it."""
+    name = result.character
+    lines = []
+    if result.attack:
+        lines.append(_blow(result.attack))
+    if result.defended:
+        lines.append(f"{name} takes a defensive stance, harder to hit this round.")
+    if result.flee:
+        lines.append(
+            f"{name} tries to escape and "
+            + ("gets away." if result.flee.success else "fails; the enemies close in.")
+        )
+    lines.extend(_blow(a) for a in result.enemy_attacks)
+
+    player = state["player"]
+    standing = [
+        f"{e['name']}: {_condition(e['hp'], e['max_hp'])}" for e in state["enemies"]
+    ]
+    after = (
+        f"{name}: {player['hp']}/{player['max_hp']} HP. " + "; ".join(standing) + "."
+    )
+
+    endings = {
+        "active": f"The fight goes on. In 2-4 sentences, narrate this exchange, then ask what {name} does next.",
+        "won": "Every enemy is down. Narrate the final blow and the moment after the fight, then ask what they do now.",
+        "fled": f"{name} escapes. Narrate the escape and where they end up, then ask what they do.",
+        "lost": (
+            f"{name} has fallen at 0 HP and is dead. This is permanent. Narrate their "
+            "death with weight and dignity in 3-4 sentences. No rescue, no revival, no "
+            "question for the player: this is the end of their story."
+        ),
+    }
+    return (
+        f"## Combat Round {result.round} (already resolved by the server)\n"
+        "The dice are rolled and the damage is applied. Narrate exactly this outcome: "
+        "never change who hit, who missed, who fell, or anyone's health. Do not repeat "
+        "the numbers; the player sees them.\n"
+        + "\n".join(f"- {line}" for line in lines)
+        + f"\n\nAfter the round: {after}\n\n{endings[result.outcome]}\n"
+    )

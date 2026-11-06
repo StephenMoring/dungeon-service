@@ -154,7 +154,9 @@ def test_known_context_is_blank_without_memories():
 
 def test_memories_tell_the_dm_to_show_what_the_player_knows():
     memories = RetrievedMemories(
-        npcs=[NpcMemory(campaign_id=1, name="Aldo Venn", secrets="Lied about the docks")]
+        npcs=[
+            NpcMemory(campaign_id=1, name="Aldo Venn", secrets="Lied about the docks")
+        ]
     )
 
     section = format_memories(memories)
@@ -162,3 +164,65 @@ def test_memories_tell_the_dm_to_show_what_the_player_knows():
     # A repeated lie must not read as unchallenged, but the player decides what to do.
     assert "repeats a claim the player has evidence against" in section
     assert "never decide for the player" in section
+
+
+class TestCombatPrompts:
+    def test_dm_is_told_to_start_fights_with_the_tool(self):
+        assert "start_encounter" in master_system_prompt
+        assert "death is permanent" in master_system_prompt
+
+    def test_turn_prompt_shows_health(self):
+        campaign = Campaign(id=1, name="c", theme="t", description="d")
+        character = make_character(max_hp=18, current_hp=11)
+
+        prompt = build_turn_system_prompt(campaign, character, None)
+
+        assert "**Health**: 11/18 HP" in prompt
+
+
+def _round(outcome="active"):
+    from src.services.combat_service import Attack, RoundResult
+
+    return RoundResult(
+        round=2,
+        action="attack",
+        character="Wren",
+        attack=Attack("Wren", "Goblin 1", 15, 7, 22, 11, True, True, 9, 0, 7),
+        enemy_attacks=[
+            Attack("Goblin 2", "Wren", 4, 3, 7, 12, False, False, 0, 18, 18)
+        ],
+        outcome=outcome,
+    )
+
+
+STATE = {
+    "enemies": [
+        {"id": 1, "name": "Goblin 1", "kind": "goblin", "hp": 0, "max_hp": 7},
+        {"id": 2, "name": "Goblin 2", "kind": "goblin", "hp": 2, "max_hp": 7},
+    ],
+    "player": {"hp": 18, "max_hp": 18, "defense": 12, "dead": False},
+}
+
+
+class TestCombatRoundSection:
+    def test_states_the_outcome_as_fixed(self):
+        from src.services.prompts import combat_round_section
+
+        text = combat_round_section(_round(), STATE)
+
+        assert "## Combat Round 2 (already resolved by the server)" in text
+        assert (
+            "- Wren lands a critical hit on Goblin 1 for 9 damage and drops them."
+            in text
+        )
+        assert "- Goblin 2 attacks Wren and misses." in text
+        assert "Wren: 18/18 HP. Goblin 1: down; Goblin 2: badly wounded." in text
+        assert "never change who hit" in text
+
+    def test_death_is_final(self):
+        from src.services.prompts import combat_round_section
+
+        text = combat_round_section(_round("lost"), STATE)
+
+        assert "is dead. This is permanent" in text
+        assert "No rescue, no revival" in text

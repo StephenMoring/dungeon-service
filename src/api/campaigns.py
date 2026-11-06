@@ -9,7 +9,12 @@ from src.models.campaign import (
 from src.models.character import Character
 from src.models.user import User
 from src.api.dependencies import enforce_limit, get_current_user
-from src.services.campaign_service import create, delete_for_user, list_for_user
+from src.services.campaign_service import (
+    DeadCharacter,
+    create,
+    delete_for_user,
+    list_for_user,
+)
 
 campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -23,6 +28,8 @@ def create_campaign(
     enforce_limit(session, user, "campaign")
     try:
         return create(campaign_description, session, user)
+    except DeadCharacter as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

@@ -68,6 +68,9 @@ INSERT INTO character (name, hero_class, biography, description, age, campaign_i
     5, 6, 6, 8, 7, 5, 6
 );
 
+-- Hit points from endurance, as combat_service.max_hp_for sets them.
+UPDATE character SET max_hp = 10 + 2 * COALESCE(endurance, 5), current_hp = 10 + 2 * COALESCE(endurance, 5);
+
 -- Campaign 1 checkpoints: Festival of Masks → A Debt of Blood → Crown Without a Head
 INSERT INTO campaigncheckpoint (campaign_id, checkpoint_id, "order", status) VALUES
 (1, 7,  0, 'new'),

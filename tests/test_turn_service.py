@@ -12,6 +12,7 @@ from src.services.dm_agent import TextDelta
 from src.services.embedding_service import extract_and_store_memories
 from src.services.memory_service import RetrievedMemories
 from src.services.turn_service import (
+    SavedTurn,
     load_turn_context,
     save_turn,
     stream_turn,
@@ -207,7 +208,7 @@ async def run_stream(background_tasks=None) -> list[tuple[str, dict]]:
 
 @pytest.mark.anyio
 class TestStreamTurn:
-    @patch("src.services.turn_service.save_turn", return_value=42)
+    @patch("src.services.turn_service.save_turn", return_value=SavedTurn(42))
     async def test_stream_event_order(self, _save):
         with patch(
             "src.services.turn_service.process_turn_stream",
@@ -226,7 +227,7 @@ class TestStreamTurn:
         assert events[2][1] == {"text": "a"}
         assert events[-1][1] == {"message_id": 42}
 
-    @patch("src.services.turn_service.save_turn", return_value=42)
+    @patch("src.services.turn_service.save_turn", return_value=SavedTurn(42))
     async def test_saves_concatenated_text(self, save):
         with patch(
             "src.services.turn_service.process_turn_stream",
@@ -234,9 +235,9 @@ class TestStreamTurn:
         ):
             await run_stream()
 
-        save.assert_called_once_with(1, 1, "I sneak", "ab")
+        save.assert_called_once_with(1, 1, "I sneak", "ab", None)
 
-    @patch("src.services.turn_service.save_turn", return_value=42)
+    @patch("src.services.turn_service.save_turn", return_value=SavedTurn(42))
     async def test_schedules_memory_extraction(self, _save):
         tasks = MagicMock()
         with patch(
@@ -295,7 +296,7 @@ class TestSaveTurn:
 
         session.commit.side_effect = assign_ids
 
-        message_id = save_turn(1, 1, "I sneak", "Caught.")
+        saved_turn = save_turn(1, 1, "I sneak", "Caught.")
 
         saved = [c.args[0] for c in session.add.call_args_list]
         assert [(m.role, m.content) for m in saved] == [
@@ -303,4 +304,112 @@ class TestSaveTurn:
             ("assistant", "Caught."),
         ]
         session.commit.assert_called_once()
-        assert message_id == 2
+        assert saved_turn == SavedTurn(message_id=2)
+
+
+@pytest.mark.anyio
+class TestStreamTurnStartsAFight:
+    async def test_saves_the_plan_with_the_turn_and_sends_combat(self):
+        from src.tools.combat_tools import EncounterPlan
+
+        plan = EncounterPlan()
+        state = {"id": 5, "status": "active", "enemies": [], "player": {}}
+        with (
+            patch(
+                "src.services.turn_service.save_turn",
+                return_value=SavedTurn(42, encounter=state),
+            ) as save,
+            patch(
+                "src.services.turn_service.process_turn_stream",
+                fake_dm(plan, TextDelta("Goblins!")),
+            ),
+        ):
+            events = await run_stream()
+
+        save.assert_called_once_with(1, 1, "I sneak", "Goblins!", plan)
+        assert [name for name, _ in events] == ["thinking", "text", "combat", "done"]
+        assert events[2][1] == state
+
+
+class TestSaveTurnWithEncounter:
+    @patch("src.services.turn_service.combatants_of", return_value=[])
+    @patch("src.services.turn_service.begin_encounter")
+    @patch("src.services.turn_service.Session")
+    def test_encounter_is_saved_in_the_same_commit(
+        self, session_cls, begin, _combatants
+    ):
+        from src.models.combat import Encounter
+        from src.tools.combat_tools import EncounterPlan, PlannedCombatant
+        from tests.test_combat_service import GOBLIN
+
+        session = session_cls.return_value.__enter__.return_value
+        session.commit.side_effect = lambda: setattr(
+            session.add.call_args_list[1].args[0], "id", 2
+        )
+        session.get.return_value = make_character()
+        begin.return_value = Encounter(id=9, campaign_id=1, character_id=1)
+        plan = EncounterPlan([PlannedCombatant(GOBLIN, "Goblin")])
+
+        saved = save_turn(1, 1, "I draw steel", "They charge.", plan)
+
+        begin.assert_called_once_with(session, 1, 1, plan)
+        session.commit.assert_called_once()
+        assert saved.encounter is not None and saved.encounter["id"] == 9
+
+    @patch("src.services.turn_service.begin_encounter")
+    @patch("src.services.turn_service.Session")
+    def test_a_plan_with_no_enemies_starts_nothing(self, session_cls, begin):
+        from src.tools.combat_tools import EncounterPlan
+
+        session = session_cls.return_value.__enter__.return_value
+        session.commit.side_effect = lambda: setattr(
+            session.add.call_args_list[1].args[0], "id", 2
+        )
+
+        saved = save_turn(1, 1, "a", "b", EncounterPlan())
+
+        begin.assert_not_called()
+        assert saved.encounter is None
+
+
+@pytest.mark.anyio
+class TestStreamCombatRound:
+    async def run(self, narration, tasks=None):
+        from src.services.turn_service import stream_combat_round
+        from tests.test_prompts import STATE, _round
+
+        with patch("src.services.turn_service.narrate_round_stream", narration):
+            return parse_sse(
+                [
+                    chunk
+                    async for chunk in stream_combat_round(
+                        make_turn(), _round(), STATE, tasks or MagicMock()
+                    )
+                ]
+            )
+
+    @patch("src.services.turn_service.save_turn", return_value=SavedTurn(7))
+    async def test_sends_dice_and_health_before_narration(self, save):
+        async def narration(_turn, _round, _state):
+            yield TextDelta("Steel flashes.")
+
+        tasks = MagicMock()
+        events = await self.run(narration, tasks)
+
+        assert [name for name, _ in events] == ["round", "combat", "text", "done"]
+        assert events[0][1]["attack"]["damage"] == 9
+        assert events[1][1]["enemies"][1]["hp"] == 2
+        save.assert_called_once_with(1, 1, "I sneak", "Steel flashes.")
+        tasks.add_task.assert_called_once()
+
+    @patch("src.services.turn_service.save_turn")
+    async def test_failed_narration_keeps_the_round(self, save):
+        async def narration(_turn, _round, _state):
+            raise RuntimeError("overloaded")
+            yield  # pragma: no cover
+
+        events = await self.run(narration)
+
+        assert [name for name, _ in events] == ["round", "combat", "error"]
+        assert "the round stands" in events[-1][1]["detail"]
+        save.assert_not_called()

@@ -25,6 +25,17 @@ def no_memory_lookup():
 
 
 @pytest.fixture(autouse=True)
+def no_combat_lookups():
+    """Turn routes and context load with no fight going on and an empty bestiary,
+    unless a test patches these again."""
+    with (
+        patch("src.services.turn_service.load_bestiary", return_value=[]),
+        patch("src.api.characters.active_encounter", return_value=None),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def no_rate_limits():
     """Route tests don't count Claude calls unless they patch check_and_record."""
     with patch("src.api.dependencies.check_and_record"):

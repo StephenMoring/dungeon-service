@@ -13,9 +13,14 @@ from src.models.campaign import (
 )
 from src.models.character import Character
 from src.models.memory import EventMemory, ItemMemory, LocationMemory, NpcMemory
+from src.models.combat import Encounter
 from src.models.message_history import MessageHistory
 from src.models.user import User
 from src.services.dm_agent import create_campaign
+
+
+class DeadCharacter(Exception):
+    pass
 
 
 def create(
@@ -26,6 +31,8 @@ def create(
         raise ValueError("Character not found")
     if character.user_id != user.id:
         raise ValueError("Character does not belong to this user")
+    if character.died_at is not None:
+        raise DeadCharacter(f"{character.name} has died and can't adventure again.")
 
     campaign_json = create_campaign(campaign_description.description, session)
     if not campaign_json:
@@ -147,6 +154,7 @@ def delete_for_user(campaign_id: int, session: Session, user: User) -> None:
         ItemMemory,
         EventMemory,
         MessageHistory,
+        Encounter,  # its combatants go with it (ON DELETE CASCADE)
         CampaignCheckpoint,
     ):
         session.exec(delete(model).where(col(model.campaign_id) == campaign_id))  # type: ignore[call-overload]

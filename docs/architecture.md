@@ -11,7 +11,7 @@ flowchart TB
   player["<b>Player</b><br/><i>[Person]</i><br/>Creates characters and campaigns,<br/>plays text adventures"]
   dungeon["<b>AI Dungeon Master</b><br/><i>[Software System]</i><br/>Web app + API that runs AI-narrated<br/>campaigns with server-side dice checks"]
   discord["<b>Discord</b><br/><i>[External System]</i><br/>OAuth identity provider"]
-  anthropic["<b>Anthropic Claude API</b><br/><i>[External System]</i><br/>Characters, campaigns, DM narration,<br/>roll_check tool, memory extraction"]
+  anthropic["<b>Anthropic Claude API</b><br/><i>[External System]</i><br/>Characters, campaigns, DM narration,<br/>roll_check + start_encounter tools,<br/>memory extraction"]
   voyage["<b>Voyage AI</b><br/><i>[External System]</i><br/>Text embeddings (voyage-3.5)<br/>for memory storage + search"]
 
   player -- "Plays in browser<br/>[HTTPS]" --> dungeon
@@ -82,7 +82,7 @@ flowchart LR
   subgraph svc["dungeon-service [Container]"]
     direction LR
     authR["<b>auth router</b><br/>POST /auth/discord/callback"]
-    charR["<b>characters router</b><br/>CRUD, preview, lookups,<br/>turn stream (SSE)<br/><i>session cookie via get_current_user</i>"]
+    charR["<b>characters router</b><br/>CRUD, preview, lookups,<br/>turn + combat round streams (SSE)<br/><i>session cookie via get_current_user</i>"]
     campR["<b>campaigns router</b><br/>Create, list, delete, scoped<br/>to the current user<br/><i>session cookie via get_current_user</i>"]
     subgraph services["Services · src/services"]
       direction TB
@@ -91,10 +91,11 @@ flowchart LR
       turnS["<b>turn_service</b><br/>Context, SSE events,<br/>saves messages"]
       embS["<b>embedding_service</b><br/>Background: extract,<br/>embed, upsert memories"]
       campS["<b>campaign_service</b><br/>Campaign + checkpoints"]
+      combS["<b>combat_service</b><br/>Encounters, rounds,<br/>HP and permadeath"]
     end
     memS["<b>memory_service</b><br/>Vector search over<br/>campaign memories"]
     dm["<b>dm_agent</b><br/>All Claude calls,<br/>prompts.py system prompts"]
-    tools["<b>tools</b><br/>search_checkpoints,<br/>roll_check (d20 + stat)"]
+    tools["<b>tools</b><br/>search_checkpoints,<br/>roll_check (d20 + stat),<br/>start_encounter"]
   end
 
   db[("<b>PostgreSQL + pgvector</b>")]
@@ -109,6 +110,8 @@ flowchart LR
   authR -- "Token + user fetch" --> discord
   charR --> charS
   charR --> turnS
+  charR -- "resolve round" --> combS
+  turnS -- "save encounter" --> combS
   charR -. "after each turn" .-> embS
   campR --> campS
   charS -- "create_character" --> dm
@@ -128,7 +131,7 @@ flowchart LR
   classDef component fill:#85bbf0,stroke:#5d82a8,color:#0b2340
   classDef external fill:#6b6b6b,stroke:#4d4d4d,color:#fff
   class web,db container
-  class authR,charR,campR,authS,charS,campS,turnS,memS,embS,dm,tools component
+  class authR,charR,campR,authS,charS,campS,combS,turnS,memS,embS,dm,tools component
   class discord,anthropic,voyage external
   style svc fill:none,stroke:#438dd5,stroke-width:2px,stroke-dasharray:6 4
   style services fill:#eef5fc,stroke:#85bbf0

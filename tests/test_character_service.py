@@ -62,6 +62,15 @@ class TestCreate:
         assert saved.biography.startswith("A former street thief")
         session.commit.assert_called_once()
 
+    def test_starts_at_full_health_from_endurance(self, user):
+        session = MagicMock()
+
+        saved = create_from_preview(preview_token(user), session, user)
+
+        assert saved.max_hp == 10 + 2 * saved.endurance
+        assert saved.current_hp == saved.max_hp
+        assert saved.died_at is None
+
     def test_refuses_another_players_preview(self, user):
         other = User(id=2, discord_id="2", username="other", avatar_url="")
 

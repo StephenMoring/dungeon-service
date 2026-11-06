@@ -260,3 +260,72 @@ class TestProcessTurnStream:
         system = stream.call_args.kwargs["system"]
         assert "What You Remember" in system
         assert "Found the guild ledger" in system
+
+
+@pytest.mark.anyio
+class TestStartEncounter:
+    def turn(self):
+        from tests.test_combat_service import GOBLIN
+
+        return {**make_turn(), "bestiary": [GOBLIN]}
+
+    async def test_offers_the_tool_when_there_is_a_bestiary(self, mocker):
+        stream = mocker.patch(
+            "src.services.dm_agent.async_client.messages.stream",
+            side_effect=[FakeStream(["Quiet."], text_response("Quiet."))],
+        )
+
+        await collect(process_turn_stream(self.turn()))
+
+        names = [t["name"] for t in stream.call_args.kwargs["tools"]]
+        assert names == ["roll_check", "start_encounter"]
+
+    async def test_yields_the_plan_and_tells_the_dm_it_started(self, mocker):
+        from src.tools.combat_tools import EncounterPlan
+
+        stream = mocker.patch(
+            "src.services.dm_agent.async_client.messages.stream",
+            side_effect=[
+                FakeStream(
+                    [],
+                    tool_use_response(
+                        "start_encounter", {"enemies": [{"kind": "goblin"}] * 2}
+                    ),
+                ),
+                FakeStream(["Two goblins."], text_response("Two goblins.")),
+            ],
+        )
+
+        events = await collect(process_turn_stream(self.turn()))
+
+        plan, text = events
+        assert isinstance(plan, EncounterPlan)
+        assert [c.name for c in plan.combatants] == ["Goblin 1", "Goblin 2"]
+        assert text == TextDelta("Two goblins.")
+        result = stream.call_args_list[1].kwargs["messages"][-1]["content"][0]
+        assert "Encounter started against" in result["content"]
+        assert stream.call_args_list[1].kwargs["tool_choice"] == {"type": "none"}
+
+
+@pytest.mark.anyio
+class TestNarrateRound:
+    async def test_one_request_without_tools_with_the_round_in_the_prompt(self, mocker):
+        from src.services.dm_agent import narrate_round_stream
+        from tests.test_prompts import STATE, _round
+
+        stream = mocker.patch(
+            "src.services.dm_agent.async_client.messages.stream",
+            side_effect=[FakeStream(["Steel ", "flashes."], text_response("x"))],
+        )
+
+        events = await collect(narrate_round_stream(make_turn(), _round(), STATE))
+
+        assert events == [TextDelta("Steel "), TextDelta("flashes.")]
+        kwargs = stream.call_args.kwargs
+        assert "tools" not in kwargs
+        last = kwargs["messages"][-1]
+        assert last["role"] == "user"
+        assert last["content"].startswith(
+            "I sneak past the guards\n\n## Combat Round 2"
+        )
+        assert "Combat Round" not in kwargs["system"]

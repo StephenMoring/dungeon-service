@@ -16,6 +16,7 @@ from src.models.character import (
 from src.models.message_history import MessageHistory
 from src.models.user import User
 from src.services.dm_agent import create_character
+from src.services.combat_service import max_hp_for
 
 
 # Character stats come from Claude, never from the player: a preview is signed for the
@@ -99,7 +100,10 @@ def create_from_preview(token: str, session: Session, user: User) -> Character:
         raise InvalidPreview("This character preview isn't valid. Generate it again.")
 
     sheet = CharacterCreate.model_validate(claims["sheet"])
-    character = Character(**sheet.model_dump(), user_id=user.id)
+    hp = max_hp_for(sheet.endurance)
+    character = Character(
+        **sheet.model_dump(), user_id=user.id, max_hp=hp, current_hp=hp
+    )
     session.add(character)
     session.commit()
     session.refresh(character)

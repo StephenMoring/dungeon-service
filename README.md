@@ -11,6 +11,7 @@ The frontend is the sibling repo `../dungeon-web`. Its Vite dev server (`http://
 - **Campaigns**: The player picks a character and describes the campaign they want. Claude classifies the request into tags, calls the `search_checkpoints` tool to pull matching pre-authored scenarios, and returns a campaign with an ordered list of checkpoints and an opening message. The first checkpoint is active and the rest are locked. The character joins the campaign, and the opening message starts its history.
 - **Streaming turns**: Each player message goes to Claude with the campaign, character sheet, active checkpoint, relevant campaign memories and the last 10 messages. The reply streams back as Server-Sent Events (`thinking`, `roll`, `text`, `done`, `error`). Both sides of the exchange are saved when the stream finishes; nothing is saved if it fails.
 - **Dice checks**: When an action's outcome is uncertain and failure would matter (sneaking, persuading, spotting something hidden), Claude calls the `roll_check` tool with a stat, a difficulty and a reason. The server rolls a d20 and adds the stat, and the action passes if the total meets the target: easy 10, medium 15, hard 20 (ties pass). The result streams to the browser as a `roll` event, which the frontend animates before revealing the narration. Claude must narrate failures as failures. At most one roll per turn, and rolls are not stored.
+- **Combat**: Characters have hit points (`10 + 2 × endurance`). When a fight breaks out, Claude calls the `start_encounter` tool with 1-4 enemies from the bestiary (the `enemy` table: goblins to a young dragon, seeded by `V6__combat.sql`); the server saves the encounter with the turn and sends a `combat` event. While a fight is on, free-text turns are refused (409) and the player picks a button: attack (a chosen enemy), defend (+4 defense this round) or flee. `POST /characters/{id}/combat/stream` resolves the round on the server first, with every roll and hit point in `combat_service`, commits it (so a refresh or a failed narration can't reroll it), streams it as `round` and `combat` events, then has Claude narrate that outcome in one request with no tools. Attacks are d20 + the class's stat (warrior strength, rogue agility, mage intelligence, ...) against the target's defense; a natural 20 (19-20 with luck 8+) crits for double dice. Every enemy still standing then attacks. The fight ends when every enemy is down (won), the character escapes (fled), or the character reaches 0 HP (lost). **Death is permanent**: `died_at` is set, the character is kept, and it can take no more turns or join a new campaign. HP carries over between fights, and there is no healing yet.
 - **Campaign memory (RAG)**: After each turn, a background task asks Claude to extract NPCs, locations, items and events from the exchange, embeds them with Voyage AI (`voyage-3.5`, 1024 dimensions), and upserts them into pgvector tables per campaign. Before each turn, the DM's last reply plus the player's message are embedded as a search query, and a cosine-similarity search pulls up to 3 close matches of each kind from that campaign (cutoff: cosine distance 0.6). The matches go into the DM's prompt as "What You Remember", including secrets the player has uncovered, so the DM stays consistent with what the player knows and characters' lies can be caught. If the lookup fails, the turn continues without memories.
 - **Limits on Claude calls**: Turns, character previews and campaign creation are limited per user (per minute and per rolling 24 hours) and for everyone together (per 24 hours), so one player, or many free Discord accounts, can't run up the API bill. Defaults: turns 10/min, 300/day, 3,000/day overall; previews 5/min, 30/day, 300/day overall; campaigns 2/min, 10/day, 100/day overall (`src/services/usage_service.py:LIMITS`). Over a limit, the route answers 429 with `Retry-After` and a message for the player. Each accepted call is a row in `llmusage`, so limits hold across restarts; a call counts even if Claude then fails.
 - **Per-user data**: All users share one database, and every route that returns player data filters by the signed-in user. Characters carry a `user_id`; campaigns belong to whoever owns their character. Checkpoints, classes and races are shared content.
@@ -33,7 +34,7 @@ C4 diagrams (system context, containers, components), sequence diagrams for a tu
 src/
   api/          FastAPI routers: auth, characters, campaigns; get_current_user dependency
   services/     dm_agent (all Claude calls), prompts, memory retrieval, turn/campaign/character/auth/embedding services
-  tools/        Claude tools: search_checkpoints (campaign creation), roll_check (dice)
+  tools/        Claude tools: search_checkpoints (campaign creation), roll_check (dice), start_encounter (combat)
   models/       SQLModel tables and request/response schemas
   db/           engine + session dependency
   config/       env var loading
@@ -62,7 +63,9 @@ All routes except `/health` and `/auth/discord/callback` need the `dungeon_sessi
 | GET | `/characters/races` | List races |
 | GET | `/characters/{id}` | One of your characters |
 | GET | `/characters/{id}/turns` | Message history for your character |
-| POST | `/characters/{id}/turns/stream` | Play a turn (SSE: `thinking`, `roll`, `text`, `done`, `error`) |
+| POST | `/characters/{id}/turns/stream` | Play a turn (SSE: `thinking`, `roll`, `text`, `combat`, `done`, `error`); 409 during a fight or once the character has died |
+| GET | `/characters/{id}/encounter` | The character's active fight (enemies with HP, the player's HP and defense), or `null` |
+| POST | `/characters/{id}/combat/stream` | Play a combat round: `{"action": "attack" \| "defend" \| "flee", "target_id"?}` (SSE: `round`, `combat`, `text`, `done`, `error`); 409 with no fight or a dead character, 400 for an enemy that isn't standing. Counts as a turn for limits |
 | GET | `/campaigns/` | Your campaigns, each with your characters in it and its checkpoints in order |
 | POST | `/campaigns/` | Generate and save a campaign for one of your characters |
 | GET | `/campaigns/{id}/characters` | Your characters in a campaign |
@@ -75,8 +78,22 @@ All routes except `/health` and `/auth/discord/callback` need the `dungeon_sessi
 event: thinking   data: {}
 event: roll       data: {"stat", "stat_value", "roll", "total", "difficulty", "target", "success", "reason"}
 event: text       data: {"text": "..."}          (repeated)
+event: combat     data: {"id", "status", "round", "enemies": [{"id", "name", "kind", "hp", "max_hp"}], "player": {"hp", "max_hp", "defense", "dead"}}
+                  (only when the DM started a fight this turn)
 event: done       data: {"message_id": 123}
 event: error      data: {"detail": "..."}        (ends the stream; nothing saved)
+```
+
+### Combat round events
+
+```
+event: round      data: {"round", "action", "character", "attack", "flee", "defended", "enemy_attacks": [...], "outcome"}
+                  attack / each enemy attack: {"attacker", "target", "roll", "bonus", "total", "defense", "hit", "crit", "damage", "target_hp", "target_max_hp"}
+                  flee: {"roll", "bonus", "total", "target", "success"}; outcome: active | won | fled | lost
+event: combat     data: the encounter after the round (as above)
+event: text       data: {"text": "..."}          (the DM's narration, repeated)
+event: done       data: {"message_id": 123}
+event: error      data: {"detail": "..."}        (narration failed; the round still stands)
 ```
 
 ## Running locally
@@ -142,6 +159,9 @@ A Voyage account with no payment method is limited to 3 requests a minute. The r
 - Remove duplicate facts when merging a known NPC's record (an alibi can end up stored twice)
 - Checkpoint progression: detect when an objective is done, summarize it, move to the next checkpoint
 - Tune how often the DM calls for rolls, based on real play
+- Combat UI in dungeon-web: HP bar, encounter panel, attack/defend/flee buttons, round cards, a death screen
+- Healing (rest, potions) through a server-checked DM tool; until then HP only goes down
+- Tune combat balance from real play (a high attack stat hits defense 11 almost always) and bestiary tiers against the character's strength
 
 ## Known gaps
 
