@@ -333,3 +333,108 @@ class TestPlayRound:
             play_round(session, fighter(), [GOBLIN], "attack", target_id=999)
 
         session.commit.assert_not_called()
+
+
+class TestRest:
+    def session(self, encounter=None):
+        session = MagicMock()
+        session.exec.return_value.first.return_value = encounter
+        return session
+
+    def test_starts_a_rest_of_twenty_seconds(self):
+        from src.services.combat_service import REST_SECONDS, start_rest
+
+        character = fighter(current_hp=5)
+        session = self.session()
+
+        state = start_rest(session, character)
+
+        assert character.rest_started_at is not None
+        assert state["seconds"] == REST_SECONDS == 20
+        assert state["seconds_left"] == 20
+        session.commit.assert_called_once()
+
+    def test_starting_again_returns_the_same_rest(self):
+        from datetime import UTC, datetime, timedelta
+
+        from src.services.combat_service import start_rest
+
+        started = datetime.now(UTC) - timedelta(seconds=5)
+        character = fighter(current_hp=5, rest_started_at=started)
+        session = self.session()
+
+        state = start_rest(session, character)
+
+        assert character.rest_started_at == started
+        assert state["seconds_left"] == 15
+        session.commit.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "kwargs, encounter, reason",
+        [
+            ({"current_hp": 18}, None, "already at full health"),
+            ({"current_hp": 5}, fight(), "middle of a fight"),
+        ],
+    )
+    def test_refused(self, kwargs, encounter, reason):
+        from src.services.combat_service import CannotRest, start_rest
+
+        with pytest.raises(CannotRest, match=reason):
+            start_rest(self.session(encounter), fighter(**kwargs))
+
+    def test_the_dead_cannot_rest(self):
+        from datetime import UTC, datetime
+
+        from src.services.combat_service import CannotRest, start_rest
+
+        with pytest.raises(CannotRest, match="has died"):
+            start_rest(self.session(), fighter(current_hp=0, died_at=datetime.now(UTC)))
+
+    def test_finishing_too_early_heals_nothing(self):
+        from datetime import UTC, datetime, timedelta
+
+        from src.services.combat_service import CannotRest, finish_rest
+
+        character = fighter(
+            current_hp=5, rest_started_at=datetime.now(UTC) - timedelta(seconds=12)
+        )
+        session = self.session()
+
+        with pytest.raises(CannotRest, match="8 more seconds"):
+            finish_rest(session, character)
+
+        assert character.current_hp == 5
+        session.commit.assert_not_called()
+
+    def test_finishing_after_the_wait_heals_to_full(self):
+        from datetime import UTC, datetime, timedelta
+
+        from src.services.combat_service import finish_rest
+
+        character = fighter(
+            current_hp=5, rest_started_at=datetime.now(UTC) - timedelta(seconds=21)
+        )
+        session = self.session()
+
+        finish_rest(session, character)
+
+        assert character.current_hp == character.max_hp == 18
+        assert character.rest_started_at is None
+        session.commit.assert_called_once()
+
+    def test_finishing_without_resting_is_refused(self):
+        from src.services.combat_service import CannotRest, finish_rest
+
+        with pytest.raises(CannotRest, match="aren't resting"):
+            finish_rest(self.session(), fighter(current_hp=5))
+
+    def test_a_naive_timestamp_counts_as_utc(self):
+        from datetime import UTC, datetime, timedelta
+
+        from src.services.combat_service import rest_state
+
+        naive = (datetime.now(UTC) - timedelta(seconds=30)).replace(tzinfo=None)
+
+        state = rest_state(fighter(rest_started_at=naive))
+
+        assert state is not None and state["seconds_left"] == 0

@@ -139,6 +139,13 @@ class TestListCampaignCharacters:
         assert "character.campaign_id = 5" in sql
         assert "character.user_id = 1" in sql
 
+    def test_lists_characters_in_a_stable_order(self, client, session):
+        session.exec.return_value.all.return_value = []
+
+        client.get("/campaigns/5/characters")
+
+        assert "ORDER BY character.id" in compiled_sql(session.exec.call_args.args[0])
+
 
 class TestDeleteCampaign:
     @patch("src.api.campaigns.delete_for_user")

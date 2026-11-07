@@ -493,3 +493,42 @@ class TestGetEncounter:
         session.get.return_value = make_character(user_id=2)
 
         assert client.get("/characters/1/encounter").status_code == 403
+
+
+class TestRestRoutes:
+    @patch("src.api.characters.start_rest", return_value={"seconds_left": 20})
+    def test_starts_a_rest(self, start, client, session):
+        session.get.return_value = make_character()
+
+        response = client.post("/characters/1/rest")
+
+        assert response.status_code == 200
+        assert response.json() == {"seconds_left": 20}
+
+    @patch("src.api.characters.finish_rest")
+    def test_finishing_early_is_a_409(self, finish, client, session):
+        from src.services.combat_service import CannotRest
+
+        session.get.return_value = make_character()
+        finish.side_effect = CannotRest("The fire needs 8 more seconds.")
+
+        response = client.post("/characters/1/rest/finish")
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "The fire needs 8 more seconds."
+
+    def test_another_players_character_cannot_rest(self, client, session):
+        session.get.return_value = make_character(user_id=2)
+
+        assert client.post("/characters/1/rest").status_code == 403
+        assert client.post("/characters/1/rest/finish").status_code == 403
+
+    @patch("src.api.characters.load_turn_context")
+    def test_no_turns_while_resting(self, load, client, session):
+        session.get.return_value = make_character(rest_started_at=datetime.now(UTC))
+
+        response = client.post("/characters/1/turns/stream", json={"message": "hi"})
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "You're resting by the fire."
+        load.assert_not_called()

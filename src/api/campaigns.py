@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 from src.db.db import get_session
 from src.models.campaign import (
     CampaignWithDetails,
@@ -47,10 +47,11 @@ def list_characters(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
+    # Ordered, so the adventure page (which plays the first) is stable across updates.
     return session.exec(
-        select(Character).where(
-            Character.campaign_id == id, Character.user_id == user.id
-        )
+        select(Character)
+        .where(Character.campaign_id == id, Character.user_id == user.id)
+        .order_by(col(Character.id))
     ).all()
 
 

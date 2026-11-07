@@ -12,10 +12,12 @@ Rules, on the 1-10 stat scale (5 is average):
 - Fleeing: d20 + agility >= 10 + 2 per enemy still standing. Enemies don't attack a
   character who gets away.
 - After the character acts, every enemy still standing attacks in turn.
+- Resting (outside a fight) heals to full, after REST_SECONDS the server enforces.
 """
 
+import math
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from sqlmodel import Session, col, select
@@ -45,7 +47,14 @@ ATTACK_STAT_BY_CLASS = {
 }
 
 
+REST_SECONDS = 20
+
+
 class NoActiveEncounter(Exception):
+    pass
+
+
+class CannotRest(Exception):
     pass
 
 
@@ -382,3 +391,63 @@ def current_state(
         character,
         bestiary_by_id(bestiary),
     )
+
+
+# Resting
+
+
+def _aware(moment: datetime) -> datetime:
+    # psycopg2 returns TIMESTAMPTZ aware; a value set in this process may be either.
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+
+
+def rest_state(character: Character, now: datetime | None = None) -> dict | None:
+    """The character's rest, or None if they aren't resting."""
+    if character.rest_started_at is None:
+        return None
+    started = _aware(character.rest_started_at)
+    ready_at = started + timedelta(seconds=REST_SECONDS)
+    remaining = (ready_at - (now or datetime.now(UTC))).total_seconds()
+    return {
+        "started_at": started.isoformat(),
+        "ready_at": ready_at.isoformat(),
+        "seconds": REST_SECONDS,
+        "seconds_left": max(0, math.ceil(remaining)),
+    }
+
+
+def start_rest(session: Session, character: Character) -> dict:
+    """Start resting (idempotent while already resting). Refused mid-fight, at full
+    health, or for the dead."""
+    assert character.id is not None
+    if character.rest_started_at is not None:
+        state = rest_state(character)
+        assert state is not None
+        return state
+    if character.died_at is not None:
+        raise CannotRest(f"{character.name} has died.")
+    if active_encounter(session, character.id):
+        raise CannotRest("You can't rest in the middle of a fight.")
+    if character.current_hp >= character.max_hp:
+        raise CannotRest("You're already at full health.")
+    character.rest_started_at = datetime.now(UTC)
+    session.add(character)
+    session.commit()
+    state = rest_state(character)
+    assert state is not None
+    return state
+
+
+def finish_rest(session: Session, character: Character) -> Character:
+    """Heal to full once REST_SECONDS have passed since the rest started."""
+    state = rest_state(character)
+    if state is None:
+        raise CannotRest("You aren't resting.")
+    if state["seconds_left"] > 0:
+        raise CannotRest(f"The fire needs {state['seconds_left']} more seconds.")
+    character.current_hp = character.max_hp
+    character.rest_started_at = None
+    session.add(character)
+    session.commit()
+    session.refresh(character)
+    return character

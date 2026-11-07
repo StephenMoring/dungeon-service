@@ -24,13 +24,16 @@ from src.services.character_service import (
     get_user_characters,
 )
 from src.services.combat_service import (
+    CannotRest,
     InvalidTarget,
     NoActiveEncounter,
     active_encounter,
     current_state,
     describe_action,
+    finish_rest,
     load_bestiary,
     play_round,
+    start_rest,
 )
 from src.services.turn_service import (
     load_turn_context,
@@ -130,6 +133,8 @@ def play_turn_stream(
         raise HTTPException(
             status_code=409, detail="You're in a fight. Choose a combat action."
         )
+    if character.rest_started_at is not None:
+        raise HTTPException(status_code=409, detail="You're resting by the fire.")
     enforce_limit(session, user, "turn")
     try:
         turn = load_turn_context(id, turn_request.message, session)
@@ -199,3 +204,32 @@ def play_combat_round(
         stream_combat_round(turn, result, state, background_tasks),
         media_type="text/event-stream",
     )
+
+
+@character_router.post("/{id}/rest")
+def rest(
+    id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Start resting, or get the rest already under way: `seconds_left` until
+    POST .../rest/finish heals. No Claude call, so no rate limit."""
+    character = owned_character(id, session, user)
+    try:
+        return start_rest(session, character)
+    except CannotRest as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@character_router.post("/{id}/rest/finish")
+def finish_resting(
+    id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> Character:
+    """Heal to full, once the rest has lasted long enough (409 before that)."""
+    character = owned_character(id, session, user)
+    try:
+        return finish_rest(session, character)
+    except CannotRest as e:
+        raise HTTPException(status_code=409, detail=str(e))

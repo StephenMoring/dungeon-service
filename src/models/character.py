@@ -76,6 +76,8 @@ class Character(CharacterBase, table=True):
     max_hp: int = 20
     current_hp: int = 20
     died_at: datetime | None = None
+    # Set while the character rests by a fire (combat_service.start_rest).
+    rest_started_at: datetime | None = None
 
 
 class HeroClass(SQLModel, table=True):
