@@ -4,6 +4,12 @@ Backend for an AI dungeon master game. Players sign in with Discord, generate a 
 
 The frontend is the sibling repo `../dungeon-web`. Its Vite dev server (`http://localhost:5173`) proxies `/api` to this service on `:8000`.
 
+| A turn with a dice check | A fight |
+| --- | --- |
+| ![The story with a server-rolled perception check](docs/screenshots/adventure.webp) | ![A combat round: every roll, enemy health, attack, defend and flee](docs/screenshots/combat.webp) |
+
+More screens are in [dungeon-web's README](https://github.com/StephenMoring/dungeon-web#screenshots).
+
 ## Features
 
 - **Discord sign-in and sessions**: The frontend sends the OAuth code to `/auth/discord/callback`. The service exchanges it with Discord, creates or updates the user, and sets a 7-day session JWT as an httpOnly, Secure, `SameSite=Lax` cookie (`dungeon_session`), so page JavaScript never sees the token. Every route except `/health` and the sign-in callback needs that cookie, and the user is always read from it: request bodies never choose an owner. Logging out bumps the user's `token_version`, which ends every copy of the token. Requests that change data (POST/PUT/PATCH/DELETE) must also send `X-Requested-With: dungeon-web`, which other sites cannot add to a forged cross-site request.
