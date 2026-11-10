@@ -2,7 +2,7 @@
 
 Backend for an AI dungeon master game. Players sign in with Discord, generate a character from a short description, start a campaign built from pre-authored scenarios, and play a text adventure narrated by Claude. Risky actions are settled by real dice rolls on the server.
 
-The frontend is the sibling repo `../dungeon-web`. Its Vite dev server (`http://localhost:5173`) proxies `/api` to this service on `:8000`.
+The frontend is [dungeon-web](https://github.com/StephenMoring/dungeon-web), cloned next to this repo as `../dungeon-web`. Its Vite dev server (`http://localhost:5173`) proxies `/api` to this service on `:8000`.
 
 | A turn with a dice check | A fight |
 | --- | --- |
